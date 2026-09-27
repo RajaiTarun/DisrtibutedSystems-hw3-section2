@@ -1,0 +1,17 @@
+# compiled programs
+q1_mapreduce/mapper
+q1_mapreduce/combiner
+q1_mapreduce/reducer
+q1_mapreduce/sequential
+q8/sequential
+q8/mpi_q8
+
+# temporary / generated files
+q1_mapreduce/work_*/
+q1_mapreduce/output/
+*.log.tmp
+*.err
+.DS_Store
+
+# big generated datasets (they can be recreated with generate_dataset.py + seed)
+q8/testcases/data_*.txt

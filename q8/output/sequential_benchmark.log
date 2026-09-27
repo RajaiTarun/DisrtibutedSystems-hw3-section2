@@ -1,0 +1,49 @@
+N=100 K=10 S=100 seed=42
+[N=100] read_input=0.000s compute=0.000s
+
+real	0m0.002s
+user	0m0.000s
+sys	0m0.001s
+
+N=1000 K=10 S=100 seed=42
+[N=1000] read_input=0.001s compute=0.000s
+
+real	0m0.003s
+user	0m0.002s
+sys	0m0.000s
+
+N=10000 K=10 S=100 seed=42
+[N=10000] read_input=0.009s compute=0.001s
+
+real	0m0.012s
+user	0m0.010s
+sys	0m0.001s
+
+N=100000 K=10 S=100 seed=42
+[N=100000] read_input=0.089s compute=0.008s
+
+real	0m0.099s
+user	0m0.097s
+sys	0m0.001s
+
+N=1000000 K=10 S=100 seed=42
+[N=1000000] read_input=0.885s compute=0.109s
+
+real	0m0.998s
+user	0m0.971s
+sys	0m0.025s
+
+N=20000000 K=10 S=100 seed=42
+[N=20000000] read_input=17.988s compute=5.774s
+
+real	0m23.812s
+user	0m23.457s
+sys	0m0.319s
+
+N=50000000 K=10 S=100 seed=42
+[N=50000000] read_input=44.745s compute=18.706s
+
+real	1m3.656s
+user	1m2.748s
+sys	0m0.819s
+

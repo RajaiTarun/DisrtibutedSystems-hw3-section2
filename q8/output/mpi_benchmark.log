@@ -1,0 +1,203 @@
+N=100 K=10 S=100 seed=42
+--- P=2 ---
+[N=100 P=2] total=0.000s read_input=0.000s scatter=0.000s compute=0.000s gather_merge=0.000s
+
+real	0m0.102s
+user	0m0.020s
+sys	0m0.035s
+
+--- P=3 ---
+[N=100 P=3] total=0.000s read_input=0.000s scatter=0.000s compute=0.000s gather_merge=0.000s
+
+real	0m0.101s
+user	0m0.030s
+sys	0m0.035s
+
+--- P=5 ---
+[N=100 P=5] total=0.000s read_input=0.000s scatter=0.000s compute=0.000s gather_merge=0.000s
+
+real	0m0.093s
+user	0m0.046s
+sys	0m0.050s
+
+--- P=9 ---
+[N=100 P=9] total=0.007s read_input=0.000s scatter=0.007s compute=0.000s gather_merge=0.000s
+
+real	0m0.189s
+user	0m0.154s
+sys	0m0.377s
+
+N=1000 K=10 S=100 seed=42
+--- P=2 ---
+[N=1000 P=2] total=0.001s read_input=0.001s scatter=0.001s compute=0.000s gather_merge=0.000s
+
+real	0m0.096s
+user	0m0.025s
+sys	0m0.031s
+
+--- P=3 ---
+[N=1000 P=3] total=0.001s read_input=0.001s scatter=0.001s compute=0.000s gather_merge=0.000s
+
+real	0m0.085s
+user	0m0.034s
+sys	0m0.037s
+
+--- P=5 ---
+[N=1000 P=5] total=0.001s read_input=0.001s scatter=0.001s compute=0.000s gather_merge=0.000s
+
+real	0m0.088s
+user	0m0.051s
+sys	0m0.049s
+
+--- P=9 ---
+[N=1000 P=9] total=0.002s read_input=0.002s scatter=0.002s compute=0.000s gather_merge=0.000s
+
+real	0m0.179s
+user	0m0.128s
+sys	0m0.406s
+
+N=10000 K=10 S=100 seed=42
+--- P=2 ---
+[N=10000 P=2] total=0.010s read_input=0.009s scatter=0.009s compute=0.000s gather_merge=0.001s
+
+real	0m0.093s
+user	0m0.039s
+sys	0m0.035s
+
+--- P=3 ---
+[N=10000 P=3] total=0.010s read_input=0.009s scatter=0.009s compute=0.000s gather_merge=0.001s
+
+real	0m0.100s
+user	0m0.056s
+sys	0m0.039s
+
+--- P=5 ---
+[N=10000 P=5] total=0.010s read_input=0.009s scatter=0.009s compute=0.000s gather_merge=0.001s
+
+real	0m0.097s
+user	0m0.096s
+sys	0m0.059s
+
+--- P=9 ---
+[N=10000 P=9] total=0.020s read_input=0.019s scatter=0.019s compute=0.000s gather_merge=0.001s
+
+real	0m0.196s
+user	0m0.285s
+sys	0m0.408s
+
+N=100000 K=10 S=100 seed=42
+--- P=2 ---
+[N=100000 P=2] total=0.096s read_input=0.090s scatter=0.090s compute=0.003s gather_merge=0.005s
+
+real	0m0.180s
+user	0m0.211s
+sys	0m0.038s
+
+--- P=3 ---
+[N=100000 P=3] total=0.097s read_input=0.091s scatter=0.091s compute=0.002s gather_merge=0.005s
+
+real	0m0.182s
+user	0m0.305s
+sys	0m0.057s
+
+--- P=5 ---
+[N=100000 P=5] total=0.164s read_input=0.157s scatter=0.158s compute=0.001s gather_merge=0.006s
+
+real	0m0.253s
+user	0m0.858s
+sys	0m0.069s
+
+--- P=9 ---
+[N=100000 P=9] total=0.206s read_input=0.194s scatter=0.195s compute=0.001s gather_merge=0.011s
+
+real	0m0.380s
+user	0m1.932s
+sys	0m0.405s
+
+N=1000000 K=10 S=100 seed=42
+--- P=2 ---
+[N=1000000 P=2] total=0.989s read_input=0.911s scatter=0.909s compute=0.044s gather_merge=0.070s
+
+real	0m1.096s
+user	0m1.949s
+sys	0m0.113s
+
+--- P=3 ---
+[N=1000000 P=3] total=1.027s read_input=0.945s scatter=0.946s compute=0.028s gather_merge=0.073s
+
+real	0m1.133s
+user	0m3.030s
+sys	0m0.108s
+
+--- P=5 ---
+[N=1000000 P=5] total=1.007s read_input=0.916s scatter=0.922s compute=0.019s gather_merge=0.081s
+
+real	0m1.116s
+user	0m4.964s
+sys	0m0.168s
+
+--- P=9 ---
+[N=1000000 P=9] total=2.007s read_input=1.864s scatter=1.877s compute=0.018s gather_merge=0.127s
+
+real	0m2.205s
+user	0m17.913s
+sys	0m0.589s
+
+N=20000000 K=10 S=100 seed=42
+--- P=2 ---
+[N=20000000 P=2] total=22.042s read_input=18.388s scatter=18.349s compute=2.471s gather_merge=3.487s
+
+real	0m22.254s
+user	0m43.070s
+sys	0m1.356s
+
+--- P=3 ---
+[N=20000000 P=3] total=21.692s read_input=18.324s scatter=18.399s compute=1.348s gather_merge=3.184s
+
+real	0m21.880s
+user	1m2.389s
+sys	0m1.715s
+
+--- P=5 ---
+[N=20000000 P=5] total=22.354s read_input=18.370s scatter=18.489s compute=0.941s gather_merge=3.800s
+
+real	0m22.530s
+user	1m47.740s
+sys	0m1.988s
+
+--- P=9 ---
+[N=20000000 P=9] total=43.035s read_input=38.100s scatter=38.243s compute=0.720s gather_merge=4.736s
+
+real	0m43.303s
+user	6m19.714s
+sys	0m2.242s
+
+N=50000000 K=10 S=100 seed=42
+--- P=2 ---
+[N=50000000 P=2] total=56.291s read_input=45.919s scatter=45.814s compute=6.922s gather_merge=9.957s
+
+real	0m56.718s
+user	1m49.480s
+sys	0m3.365s
+
+--- P=3 ---
+[N=50000000 P=3] total=55.316s read_input=45.672s scatter=45.857s compute=4.180s gather_merge=9.187s
+
+real	0m55.721s
+user	2m38.184s
+sys	0m3.558s
+
+--- P=5 ---
+[N=50000000 P=5] total=57.277s read_input=45.769s scatter=46.031s compute=2.478s gather_merge=11.034s
+
+real	0m57.666s
+user	4m34.526s
+sys	0m4.792s
+
+--- P=9 ---
+[N=50000000 P=9] total=112.359s read_input=96.512s scatter=97.172s compute=2.161s gather_merge=14.996s
+
+real	1m52.840s
+user	16m24.780s
+sys	0m5.352s
+
