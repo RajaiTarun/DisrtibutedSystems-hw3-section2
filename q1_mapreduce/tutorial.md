@@ -284,10 +284,16 @@ That is much less than N records. The `I` lines are the biggest part of this tra
 
 ### 4.5 Floating-point precision
 
-Values are passed between programs **as text**. If we printed `1013.2500000001` as `1013.25`
-at every stage, small errors would add up and the 6-decimal averages might not match
-`sequential`. So the mapper and combiner print numbers with **17 significant digits**
-(`setprecision(17)`), which is enough to write a `double` as text and read it back exactly.
+Values are passed between programs **as text**, so we must not lose digits when printing them:
+
+- The **mapper** prints each measurement value **exactly as the text it read** (`24.49` stays
+  `24.49`). That is exact, because it is the original input. (Our first version converted to
+  `double` and printed 17 digits, which turned `24.49` into `24.489999999999998` and made the
+  mapper output more than twice as big, 312 MB instead of 148 MB for 1M records.)
+- The **combiner** prints its sums with **17 significant digits** (`setprecision(17)`). A sum like
+  `1013.2500000001` is not in the input, and 17 digits are enough to write a `double` as text and
+  read it back exactly. If we printed only 6 digits, small errors would add up and the 6-decimal
+  averages might not match `sequential`.
 
 Adding the same numbers in a **different order** can still change the last few binary digits
 of a sum. These differences are around 1e-12 and normally do not show at 6 decimals.
@@ -328,7 +334,7 @@ Suppose it is split into **2 chunks**: the first 5 records (A) and the last 5 (B
 
 ```
 K       3
-G       1 20 20 20 50 50 50 1000 1000 1000 1 1 4 4 0 20 0 10 20 0 10
+G       1 20.0 20.0 20.0 50.0 50.0 50.0 1000.0 1000.0 1000.0 1.0 1.0 4.0 4.0 0 20.0 0 10 20.0 0 10
 S0      1 20 1
 I0      1
 ...
@@ -388,12 +394,6 @@ cin.tie(nullptr);
 Makes `cin`/`cout` much faster (same as your HW2 code). This matters for millions of lines.
 
 ```cpp
-cout << setprecision(17);
-```
-Print doubles with 17 significant digits so nothing is lost (section 4.5).
-Note that `20.0` is still printed as `20`, since trailing zeros are not needed.
-
-```cpp
 string line;
 while (getline(cin, line)) {
 ```
@@ -428,8 +428,36 @@ int station_id     = stoi(tokens[1]);
 double temperature = stod(tokens[2]);  ...
 ```
 `stoll` / `stoi` / `stod` mean "string to long long / int / double".
+We only convert what we need to calculate with: the timestamp (for `timestamp / 60`), the
+station id (for the `S<id>` key) and the temperature (for the extreme check).
+
+```cpp
+string temp = tokens[2];
+string hum = tokens[3];  ...
+```
+All the measurement values are printed **as the original text** (section 4.5), so there are no
+long `24.489999999999998` numbers and the mapper output stays small.
 
 Then we print the `G`, `S<id>` and `I<id>` lines described in section 4.1.
+
+### 6.1b Reading numbers fast: `strtod` in `parseLine()` (`mr_common.hpp`)
+
+The combiner and reducer read millions of lines, and each `G` line has 21 numbers. Our first
+version used `stringstream`, which was slow (8.8 s to combine 1M records). Now it uses `strtod`:
+
+```cpp
+const char *p = line.c_str() + tabPos + 1;   // p points to the first character after the tab
+char *end;
+while (numValues < MAX_VALUES) {
+    double v = strtod(p, &end);   // read one number starting at p
+    if (end == p) break;          // nothing could be read, so the line is finished
+    values[numValues] = v;
+    numValues++;
+    p = end;                      // continue right after the number we just read
+}
+```
+`strtod` means "string to double". It skips spaces, reads one number, and tells us (in `end`)
+where it stopped. With it, combining 1M records takes 3.0 s instead of 8.8 s.
 `timestamp / 60` is integer division, so it gives the interval id.
 
 ### 6.2 `combiner.cpp` (next step)

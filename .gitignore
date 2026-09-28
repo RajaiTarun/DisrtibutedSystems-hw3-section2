@@ -3,11 +3,14 @@ q1_mapreduce/mapper
 q1_mapreduce/combiner
 q1_mapreduce/reducer
 q1_mapreduce/sequential
+q1_mapreduce/mpi_q8
 q8/sequential
 q8/mpi_q8
 
 # temporary / generated files
 q1_mapreduce/work_*/
+q1_mapreduce/bench_work_*/
+q1_mapreduce/data_*.txt
 q1_mapreduce/output/
 *.log.tmp
 *.err

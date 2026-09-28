@@ -12,8 +12,8 @@
 #pragma once
 
 #include <iostream>
-#include <sstream>
 #include <string>
+#include <cstdlib>
 using namespace std;
 
 // the G value has 21 numbers, this is the biggest value we have
@@ -40,10 +40,19 @@ bool parseLine(const string &line, string &key, double values[], int &numValues)
     key = line.substr(0, tabPos); // separating the key
 
     // now filling the values array for this particular line
-    stringstream ss(line.substr(tabPos + 1));
+    // strtod reads one number starting at p, and sets "end" to the place right after that number
+    // (it also skips the spaces before the number). if it could not read a number then end == p,
+    // which means we reached the end of the line
+    // we use strtod instead of stringstream because stringstream is very slow for millions of lines
+    const char *p = line.c_str() + tabPos + 1;
+    char *end;
     numValues = 0;
-    while (numValues < MAX_VALUES && ss >> values[numValues]) {
+    while (numValues < MAX_VALUES) {
+        double v = strtod(p, &end);
+        if (end == p) break;
+        values[numValues] = v;
         numValues++;
+        p = end;
     }
     return true;
 }

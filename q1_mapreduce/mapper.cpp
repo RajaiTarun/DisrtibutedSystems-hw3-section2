@@ -22,8 +22,6 @@ int main() {
     // makes the io fast cause we have to read a lot of lines as input
     ios_base::sync_with_stdio(false);
     cin.tie(nullptr);
-    // setting precision
-    cout << setprecision(17);
 
     string line;
     while (getline(cin, line)) {
@@ -48,13 +46,21 @@ int main() {
         if (numTokens != 7) continue;
 
         // timestamp station_id temperature humidity pressure rainfall wind_speed
+        // we only convert the values that we need to calculate something with
+        // all the other values are printed exactly as the text we read (see below)
         long long timestamp = stoll(tokens[0]);
         int station_id = stoi(tokens[1]);
         double temperature = stod(tokens[2]);
-        double humidity = stod(tokens[3]);
-        double pressure = stod(tokens[4]);
-        double rainfall = stod(tokens[5]);
-        double wind_speed = stod(tokens[6]);
+
+        // the measurement values are printed as the original text from the input, not as doubles
+        // eg "24.49" stays "24.49", but if we printed the double with 17 digits it would become
+        // "24.489999999999998", which makes the mapper output more than 2x bigger for no reason
+        // (the combiner and reducer read the text back into the exact same double anyway)
+        string temp = tokens[2];
+        string hum = tokens[3];
+        string pres = tokens[4];
+        string rain = tokens[5];
+        string wind = tokens[6];
 
         int extreme = 0;
         if (temperature >= 40.0 || temperature <= 0.0) extreme = 1;
@@ -70,17 +76,17 @@ int main() {
         // hottest_temp hottest_station hottest_timestamp
         // coldest_temp coldest_station coldest_timestamp
         cout << "G\t" << 1 << " "
-             << temperature << " " << temperature << " " << temperature << " "
-             << humidity << " " << humidity << " " << humidity << " "
-             << pressure << " " << pressure << " " << pressure << " "
-             << rainfall << " " << rainfall << " "
-             << wind_speed << " " << wind_speed << " "
+             << temp << " " << temp << " " << temp << " "
+             << hum << " " << hum << " " << hum << " "
+             << pres << " " << pres << " " << pres << " "
+             << rain << " " << rain << " "
+             << wind << " " << wind << " "
              << extreme << " "
-             << temperature << " " << station_id << " " << timestamp << " "
-             << temperature << " " << station_id << " " << timestamp << "\n";
+             << temp << " " << station_id << " " << timestamp << " "
+             << temp << " " << station_id << " " << timestamp << "\n";
 
         // per station: count temp_sum rain_sum
-        cout << "S" << station_id << "\t" << 1 << " " << temperature << " " << rainfall << "\n";
+        cout << "S" << station_id << "\t" << 1 << " " << temp << " " << rain << "\n";
 
         // per interval: count
         cout << "I" << (timestamp / 60) << "\t" << 1 << "\n";
