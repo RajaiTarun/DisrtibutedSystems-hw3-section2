@@ -1,0 +1,27 @@
+==========================================
+SLURM_JOB_ID = 98699
+SLURM_NODELIST = node06
+SLURM_JOB_GPUS = 
+==========================================
+=========================================
+Job id:    98699
+Nodes:     node06
+Mappers:   4
+Input:     ../q8/testcases/test_sample_input.txt (10 lines)
+=========================================
+Compiling...
+
+Split:           .004s
+Map:             .176s
+Sort (local):    .161s
+Combine:         .160s
+Shuffle (merge): .003s
+Reduce:          .002s
+-------------------------
+TOTAL:           .521s
+
+Lines after map:     31
+Lines after combine: 20
+
+Output written to output/mr_test_sample_input.txt
+CORRECTNESS: PASSED (same output as sequential)

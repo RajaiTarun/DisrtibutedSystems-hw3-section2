@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+"""
+Makes the plots and summary tables for Q1 (MapReduce vs MPI) from results/bench_results.csv
+
+Usage (from inside q1_mapreduce):
+    python3 plot_results.py
+
+Output:
+    plots/runtime_vs_workers.png    runtime vs number of workers, one panel per input size
+    plots/runtime_vs_size.png       runtime and throughput vs input size (4 workers each)
+    plots/speedup.png               speedup vs workers for mapreduce and mpi (vs their own 1 worker run)
+    plots/mr_stage_breakdown.png    where mapreduce spends its time (50M records)
+    plots/combiner_effect.png       mapreduce with vs without the combiner (10M records)
+    plots/shuffle_lines.png         how many lines reach the shuffle vs number of mappers
+    results/summary.md              the same numbers as markdown tables (for the report)
+"""
+
+import os
+import pandas as pd
+import matplotlib
+
+matplotlib.use("Agg")  # no window, just write png files
+import matplotlib.pyplot as plt
+
+CSV = "results/bench_results.csv"
+PLOTS = "plots"
+SUMMARY = "results/summary.md"
+
+# ---- colors (validated palette: categorical slots for implementations, one blue ramp for sizes) ----
+COLOR = {
+    "mpi": "#2a78d6",                   # blue
+    "mapreduce": "#eb6834",             # orange
+    "mapreduce_nocombiner": "#1baf7a",  # aqua
+}
+STAGE_COLOR = {"split": "#2a78d6", "map": "#eb6834", "shuffle": "#1baf7a", "reduce": "#eda100"}
+SIZE_COLOR = ["#86b6ef", "#3987e5", "#1c5cab", "#0d366b"]  # light -> dark = small -> big input
+REFERENCE_GRAY = "#898781"
+INK = "#0b0b0b"
+INK_2 = "#52514e"
+GRID = "#e1e0d9"
+AXIS = "#c3c2b7"
+SURFACE = "#fcfcfb"
+
+NAME = {
+    "sequential": "Sequential (HW2)",
+    "mpi": "MPI (HW2)",
+    "mapreduce": "MapReduce",
+    "mapreduce_nocombiner": "MapReduce, no combiner",
+}
+
+plt.rcParams.update({
+    "figure.facecolor": SURFACE,
+    "axes.facecolor": SURFACE,
+    "axes.edgecolor": AXIS,
+    "axes.labelcolor": INK_2,
+    "axes.titlecolor": INK,
+    "axes.titlesize": 11,
+    "axes.labelsize": 10,
+    "axes.grid": True,
+    "axes.axisbelow": True,  # gridlines behind the bars, not on top of them
+    "grid.color": GRID,
+    "grid.linewidth": 0.8,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "xtick.color": INK_2,
+    "ytick.color": INK_2,
+    "legend.frameon": False,
+    "font.size": 9,
+    "savefig.dpi": 150,
+    "savefig.bbox": "tight",
+})
+
+
+def millions(n):
+    return f"{n // 1_000_000}M"
+
+
+def style_workers_axis(ax):
+    ax.set_xscale("log", base=2)
+    ax.set_xticks([1, 2, 4, 8])
+    ax.set_xticklabels(["1", "2", "4", "8"])
+    ax.minorticks_off()
+
+
+def save(fig, name):
+    path = os.path.join(PLOTS, name)
+    fig.savefig(path)
+    plt.close(fig)
+    print("wrote", path)
+
+
+def main():
+    os.makedirs(PLOTS, exist_ok=True)
+    df = pd.read_csv(CSV)
+    sizes = sorted(df["N"].unique())
+    workers = [1, 2, 4, 8]
+
+    def rows(impl, n=None):
+        r = df[df["impl"] == impl]
+        if n is not None:
+            r = r[r["N"] == n]
+        return r.sort_values("workers")
+
+    def seq_time(n):
+        return float(rows("sequential", n)["total_s"].iloc[0])
+
+    # total time of one implementation for one size and one number of workers
+    def time_at(impl, n, w):
+        r = rows(impl, n)
+        return float(r[r["workers"] == w]["total_s"].iloc[0])
+
+    # ---------------- 1. runtime vs workers, one panel per size ----------------
+    fig, axes = plt.subplots(1, len(sizes), figsize=(3.2 * len(sizes), 3.2))
+    for ax, n in zip(axes, sizes):
+        for impl in ["mpi", "mapreduce"]:
+            r = rows(impl, n)
+            ax.plot(r["workers"], r["total_s"], color=COLOR[impl], linewidth=2,
+                    marker="o", markersize=5, label=NAME[impl])
+        ax.axhline(seq_time(n), color=REFERENCE_GRAY, linewidth=1.5, linestyle="--",
+                   label=NAME["sequential"])
+        style_workers_axis(ax)
+        ax.set_ylim(bottom=0)
+        ax.set_title(f"N = {millions(n)} records")
+    axes[0].set_ylabel("Total time (s)")
+    fig.supxlabel("Workers (MPI) / mappers (MapReduce)", color=INK_2, fontsize=10, y=-0.04)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.08))
+    fig.suptitle("Runtime vs number of workers", y=1.15, fontsize=12, color=INK)
+    save(fig, "runtime_vs_workers.png")
+
+    # ---------------- 2. runtime and throughput vs input size (4 workers) ----------------
+    W = 4
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 3.6))
+    xs = [n / 1e6 for n in sizes]
+    series = [
+        ("sequential", [seq_time(n) for n in sizes], REFERENCE_GRAY, "--"),
+        ("mpi", [time_at("mpi", n, W) for n in sizes], COLOR["mpi"], "-"),
+        ("mapreduce", [time_at("mapreduce", n, W) for n in sizes], COLOR["mapreduce"], "-"),
+    ]
+    for impl, times, color, style in series:
+        label = NAME[impl] if impl == "sequential" else f"{NAME[impl]}, {W} workers"
+        ax1.plot(xs, times, color=color, linewidth=2, linestyle=style, marker="o", markersize=5, label=label)
+        # direct label at the end of the line
+        ax1.annotate(f"{times[-1]:.0f}s", (xs[-1], times[-1]), textcoords="offset points",
+                     xytext=(6, 0), va="center", color=INK_2)
+        throughput = [n / t / 1e6 for n, t in zip(sizes, times)]
+        ax2.plot(xs, throughput, color=color, linewidth=2, linestyle=style, marker="o", markersize=5, label=label)
+    ax1.set_title("Total time vs input size")
+    ax1.set_xlabel("Input size (million records)")
+    ax1.set_ylabel("Total time (s)")
+    ax1.set_ylim(bottom=0)
+    ax1.set_xlim(right=max(xs) * 1.12)
+    ax2.set_title("Throughput vs input size")
+    ax2.set_xlabel("Input size (million records)")
+    ax2.set_ylabel("Million records / s")
+    ax2.set_ylim(bottom=0)
+    ax1.legend(loc="upper left")
+    save(fig, "runtime_vs_size.png")
+
+    # ---------------- 3. speedup vs workers (each vs its own 1-worker run) ----------------
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3.6), sharey=True)
+    for ax, impl in zip(axes, ["mapreduce", "mpi"]):
+        for color, n in zip(SIZE_COLOR, sizes):
+            r = rows(impl, n)
+            base = time_at(impl, n, 1)
+            ax.plot(r["workers"], base / r["total_s"], color=color, linewidth=2, marker="o",
+                    markersize=5, label=f"N = {millions(n)}")
+        ax.plot(workers, workers, color=REFERENCE_GRAY, linewidth=1.5, linestyle="--", label="Ideal")
+        style_workers_axis(ax)
+        ax.set_ylim(0, 8.5)
+        ax.set_title(f"{NAME[impl]}: speedup vs its own 1-worker run")
+        ax.set_xlabel("Workers / mappers")
+    axes[0].set_ylabel("Speedup")
+    axes[0].legend(loc="upper left")
+    save(fig, "speedup.png")
+
+    # ---------------- 4. mapreduce stage breakdown for the biggest size ----------------
+    n = sizes[-1]
+    r = rows("mapreduce", n)
+    fig, ax = plt.subplots(figsize=(6.5, 3.8))
+    labels = [str(w) for w in r["workers"]]
+    bottom = [0.0] * len(r)
+    for stage in ["split", "map", "shuffle", "reduce"]:
+        vals = list(r[f"{stage}_s"])
+        ax.bar(labels, vals, bottom=bottom, width=0.55, color=STAGE_COLOR[stage],
+               edgecolor=SURFACE, linewidth=1.5, label=stage.capitalize())
+        bottom = [b + v for b, v in zip(bottom, vals)]
+    for x, total in zip(labels, r["total_s"]):
+        ax.annotate(f"{total:.0f}s", (x, total), textcoords="offset points", xytext=(0, 4),
+                    ha="center", color=INK)
+    ax.set_title(f"Where MapReduce spends its time (N = {millions(n)})")
+    ax.set_xlabel("Number of mappers")
+    ax.set_ylabel("Time (s)")
+    ax.grid(axis="x", visible=False)
+    ax.legend(loc="upper right")
+    save(fig, "mr_stage_breakdown.png")
+
+    # ---------------- 5. combiner vs no combiner ----------------
+    nc_sizes = sorted(df[df["impl"] == "mapreduce_nocombiner"]["N"].unique())
+    n = nc_sizes[-1]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 3.6))
+    width = 0.38
+    xpos = list(range(len(workers)))
+    for offset, impl in [(-width / 2, "mapreduce"), (width / 2, "mapreduce_nocombiner")]:
+        r = rows(impl, n)
+        pos = [x + offset for x in xpos]
+        label = "With combiner" if impl == "mapreduce" else "Without combiner"
+        bars = ax1.bar(pos, r["total_s"], width=width, color=COLOR[impl], edgecolor=SURFACE,
+                       linewidth=1.5, label=label)
+        ax1.bar_label(bars, fmt="%.0f", padding=2, color=INK_2, fontsize=8)
+        bars = ax2.bar(pos, r["shuffle_lines"] / 1e6, width=width, color=COLOR[impl],
+                       edgecolor=SURFACE, linewidth=1.5, label=label)
+        ax2.bar_label(bars, fmt="%.1f", padding=2, color=INK_2, fontsize=8)
+    for ax in (ax1, ax2):
+        ax.set_xticks(xpos)
+        ax.set_xticklabels([str(w) for w in workers])
+        ax.set_xlabel("Number of mappers")
+        ax.grid(axis="x", visible=False)
+    ax1.set_title(f"Total time (N = {millions(n)})")
+    ax1.set_ylabel("Time (s)")
+    ax2.set_title(f"Lines sent to the shuffle (N = {millions(n)})")
+    ax2.set_ylabel("Million lines")
+    ax1.legend(loc="upper right")
+    save(fig, "combiner_effect.png")
+
+    # ---------------- 6. shuffle lines vs mappers ----------------
+    fig, ax = plt.subplots(figsize=(6.5, 3.8))
+    for color, n in zip(SIZE_COLOR, sizes):
+        r = rows("mapreduce", n)
+        ax.plot(r["workers"], r["shuffle_lines"] / 1e6, color=color, linewidth=2, marker="o",
+                markersize=5, label=f"N = {millions(n)}")
+    style_workers_axis(ax)
+    ax.set_ylim(bottom=0)
+    ax.set_title("Lines reaching the shuffle (with combiner)")
+    ax.set_xlabel("Number of mappers")
+    ax.set_ylabel("Million lines")
+    ax.legend(loc="upper left")
+    save(fig, "shuffle_lines.png")
+
+    # ---------------- summary tables (markdown) ----------------
+    out = ["# Q1 benchmark summary", "",
+           f"Generated by `plot_results.py` from `{CSV}`. Times are in seconds.", ""]
+
+    out += ["## Total time", "",
+            "| N | Sequential | " + " | ".join(f"MPI {w}" for w in workers) + " | "
+            + " | ".join(f"MR {w}" for w in workers) + " |",
+            "|---" * (1 + 1 + 2 * len(workers)) + "|"]
+    for n in sizes:
+        mpi = [f"{t:.2f}" for t in rows("mpi", n)["total_s"]]
+        mr = [f"{t:.2f}" for t in rows("mapreduce", n)["total_s"]]
+        out.append(f"| {millions(n)} | {seq_time(n):.2f} | " + " | ".join(mpi) + " | " + " | ".join(mr) + " |")
+    out.append("")
+
+    out += ["## MapReduce stage breakdown", "",
+            "| N | Mappers | Split | Map (map+sort+combine) | Shuffle | Reduce | Total | Shuffle lines | Correct |",
+            "|---|---|---|---|---|---|---|---|---|"]
+    for n in sizes:
+        for _, x in rows("mapreduce", n).iterrows():
+            out.append(f"| {millions(n)} | {x.workers} | {x.split_s:.2f} | {x.map_s:.2f} | {x.shuffle_s:.2f} | "
+                       f"{x.reduce_s:.2f} | {x.total_s:.2f} | {int(x.shuffle_lines):,} | {x.correct} |")
+    out.append("")
+
+    out += ["## Combiner vs no combiner", "",
+            "| N | Mappers | Time with | Time without | Shuffle lines with | Shuffle lines without |",
+            "|---|---|---|---|---|---|"]
+    for n in nc_sizes:
+        a = rows("mapreduce", n).set_index("workers")
+        b = rows("mapreduce_nocombiner", n).set_index("workers")
+        for w in workers:
+            out.append(f"| {millions(n)} | {w} | {a.loc[w, 'total_s']:.2f} | {b.loc[w, 'total_s']:.2f} | "
+                       f"{int(a.loc[w, 'shuffle_lines']):,} | {int(b.loc[w, 'shuffle_lines']):,} |")
+    out.append("")
+
+    out += ["## Correctness of every run (vs sequential)", "",
+            "| Result | Runs |", "|---|---|"]
+    for result, count in df["correct"].value_counts().items():
+        out.append(f"| {result} | {count} |")
+    out.append("")
+
+    with open(SUMMARY, "w") as f:
+        f.write("\n".join(out))
+    print("wrote", SUMMARY)
+
+
+if __name__ == "__main__":
+    main()

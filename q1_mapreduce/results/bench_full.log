@@ -1,0 +1,118 @@
+==========================================
+SLURM_JOB_ID = 99202
+SLURM_NODELIST = node06
+SLURM_JOB_GPUS = 
+==========================================
+=========================================
+Job id:  99202
+Nodes:   node06
+Tasks:   9
+Sizes:   1000000 10000000 20000000 50000000
+Workers: 1 2 4 8
+=========================================
+Compiling...
+
+=== N=1000000 ===
+wrote 1000000 records (K=10, S=100, seed=42) to /home/cs3401.49/ds-hw3-sec2/q1_mapreduce/bench_work_99202/data.txt
+  sequential: 1.000s
+  mpi workers=1: 1.089s FP_CLOSE
+  mpi workers=2: 1.093s EXACT
+  mpi workers=4: 1.106s EXACT
+  mpi workers=8: 2.470s EXACT
+  mapreduce P=1: total=4.814s map=4.386s shuffle=.020s reduce=.022s lines=166352 EXACT
+  mapreduce P=2: total=3.549s map=3.085s shuffle=.041s reduce=.034s lines=317001 EXACT
+  mapreduce P=4: total=2.432s map=1.910s shuffle=.078s reduce=.053s lines=518655 EXACT
+  mapreduce P=8: total=1.723s map=1.135s shuffle=.122s reduce=.068s lines=704223 EXACT
+  mapreduce_nocombiner P=1: total=7.563s map=4.416s shuffle=1.423s reduce=1.337s lines=3000001 EXACT
+  mapreduce_nocombiner P=2: total=6.034s map=2.854s shuffle=1.455s reduce=1.337s lines=3000001 EXACT
+  mapreduce_nocombiner P=4: total=5.376s map=2.137s shuffle=1.517s reduce=1.331s lines=3000001 EXACT
+  mapreduce_nocombiner P=8: total=5.199s map=1.904s shuffle=1.563s reduce=1.333s lines=3000001 EXACT
+
+=== N=10000000 ===
+wrote 10000000 records (K=10, S=100, seed=42) to /home/cs3401.49/ds-hw3-sec2/q1_mapreduce/bench_work_99202/data.txt
+  sequential: 11.219s
+  mpi workers=1: 10.781s FP_CLOSE
+  mpi workers=2: 10.703s FP_CLOSE
+  mpi workers=4: 11.185s FP_CLOSE
+  mpi workers=8: 22.979s EXACT
+  mapreduce P=1: total=50.505s map=46.231s shuffle=.192s reduce=.195s lines=1662656 FP_CLOSE
+  mapreduce P=2: total=26.827s map=22.182s shuffle=.404s reduce=.325s lines=3168063 FP_CLOSE
+  mapreduce P=4: total=18.244s map=13.064s shuffle=.780s reduce=.505s lines=5181021 FP_CLOSE
+  mapreduce P=8: total=16.155s map=10.343s shuffle=1.226s reduce=.665s lines=7037047 EXACT
+  mapreduce_nocombiner P=1: total=77.494s map=45.962s shuffle=14.366s reduce=13.259s lines=30000001 FP_CLOSE
+  mapreduce_nocombiner P=2: total=60.717s map=28.857s shuffle=14.731s reduce=13.230s lines=30000001 FP_CLOSE
+  mapreduce_nocombiner P=4: total=54.083s map=21.603s shuffle=15.227s reduce=13.343s lines=30000001 FP_CLOSE
+  mapreduce_nocombiner P=8: total=52.002s map=18.877s shuffle=15.887s reduce=13.317s lines=30000001 FP_CLOSE
+
+=== N=20000000 ===
+wrote 20000000 records (K=10, S=100, seed=42) to /home/cs3401.49/ds-hw3-sec2/q1_mapreduce/bench_work_99202/data.txt
+  sequential: 23.866s
+  mpi workers=1: 22.249s FP_CLOSE
+  mpi workers=2: 21.883s FP_CLOSE
+  mpi workers=4: 22.613s FP_CLOSE
+  mpi workers=8: 47.210s EXACT
+  mapreduce P=1: total=101.765s map=93.100s shuffle=.391s reduce=.386s lines=3325195 FP_CLOSE
+  mapreduce P=2: total=57.132s map=47.753s shuffle=.820s reduce=.644s lines=6335064 FP_CLOSE
+  mapreduce P=4: total=38.027s map=27.537s shuffle=1.591s reduce=1.014s lines=10359585 FP_CLOSE
+  mapreduce P=8: total=32.908s map=21.194s shuffle=2.495s reduce=1.331s lines=14073690 FP_CLOSE
+
+=== N=50000000 ===
+wrote 50000000 records (K=10, S=100, seed=42) to /home/cs3401.49/ds-hw3-sec2/q1_mapreduce/bench_work_99202/data.txt
+  sequential: 63.648s
+  mpi workers=1: 56.740s FP_CLOSE
+  mpi workers=2: 55.782s FP_CLOSE
+  mpi workers=4: 58.064s FP_CLOSE
+  mpi workers=8: 113.484s EXACT
+  mapreduce P=1: total=253.444s map=231.711s shuffle=.977s reduce=.985s lines=8312652 FP_CLOSE
+  mapreduce P=2: total=142.895s map=119.425s shuffle=2.056s reduce=1.610s lines=15836507 FP_CLOSE
+  mapreduce P=4: total=95.462s map=69.089s shuffle=4.026s reduce=2.522s lines=25896376 FP_CLOSE
+  mapreduce P=8: total=81.505s map=52.132s shuffle=6.262s reduce=3.293s lines=35176967 FP_CLOSE
+
+=========================================
+Benchmark complete. Results in results/bench_results.csv
+=========================================
+impl                  N         workers  total_s  split_s  map_s    shuffle_s  reduce_s  shuffle_lines  correct
+sequential            1000000   1        1.000    -        -        -          -         -              REFERENCE
+mpi                   1000000   1        1.089    -        -        -          -         -              FP_CLOSE
+mpi                   1000000   2        1.093    -        -        -          -         -              EXACT
+mpi                   1000000   4        1.106    -        -        -          -         -              EXACT
+mpi                   1000000   8        2.470    -        -        -          -         -              EXACT
+mapreduce             1000000   1        4.814    .385     4.386    .020       .022      166352         EXACT
+mapreduce             1000000   2        3.549    .386     3.085    .041       .034      317001         EXACT
+mapreduce             1000000   4        2.432    .391     1.910    .078       .053      518655         EXACT
+mapreduce             1000000   8        1.723    .397     1.135    .122       .068      704223         EXACT
+mapreduce_nocombiner  1000000   1        7.563    .385     4.416    1.423      1.337     3000001        EXACT
+mapreduce_nocombiner  1000000   2        6.034    .386     2.854    1.455      1.337     3000001        EXACT
+mapreduce_nocombiner  1000000   4        5.376    .389     2.137    1.517      1.331     3000001        EXACT
+mapreduce_nocombiner  1000000   8        5.199    .397     1.904    1.563      1.333     3000001        EXACT
+sequential            10000000  1        11.219   -        -        -          -         -              REFERENCE
+mpi                   10000000  1        10.781   -        -        -          -         -              FP_CLOSE
+mpi                   10000000  2        10.703   -        -        -          -         -              FP_CLOSE
+mpi                   10000000  4        11.185   -        -        -          -         -              FP_CLOSE
+mpi                   10000000  8        22.979   -        -        -          -         -              EXACT
+mapreduce             10000000  1        50.505   3.885    46.231   .192       .195      1662656        FP_CLOSE
+mapreduce             10000000  2        26.827   3.914    22.182   .404       .325      3168063        FP_CLOSE
+mapreduce             10000000  4        18.244   3.893    13.064   .780       .505      5181021        FP_CLOSE
+mapreduce             10000000  8        16.155   3.921    10.343   1.226      .665      7037047        EXACT
+mapreduce_nocombiner  10000000  1        77.494   3.905    45.962   14.366     13.259    30000001       FP_CLOSE
+mapreduce_nocombiner  10000000  2        60.717   3.897    28.857   14.731     13.230    30000001       FP_CLOSE
+mapreduce_nocombiner  10000000  4        54.083   3.907    21.603   15.227     13.343    30000001       FP_CLOSE
+mapreduce_nocombiner  10000000  8        52.002   3.919    18.877   15.887     13.317    30000001       FP_CLOSE
+sequential            20000000  1        23.866   -        -        -          -         -              REFERENCE
+mpi                   20000000  1        22.249   -        -        -          -         -              FP_CLOSE
+mpi                   20000000  2        21.883   -        -        -          -         -              FP_CLOSE
+mpi                   20000000  4        22.613   -        -        -          -         -              FP_CLOSE
+mpi                   20000000  8        47.210   -        -        -          -         -              EXACT
+mapreduce             20000000  1        101.765  7.887    93.100   .391       .386      3325195        FP_CLOSE
+mapreduce             20000000  2        57.132   7.913    47.753   .820       .644      6335064        FP_CLOSE
+mapreduce             20000000  4        38.027   7.884    27.537   1.591      1.014     10359585       FP_CLOSE
+mapreduce             20000000  8        32.908   7.887    21.194   2.495      1.331     14073690       FP_CLOSE
+sequential            50000000  1        63.648   -        -        -          -         -              REFERENCE
+mpi                   50000000  1        56.740   -        -        -          -         -              FP_CLOSE
+mpi                   50000000  2        55.782   -        -        -          -         -              FP_CLOSE
+mpi                   50000000  4        58.064   -        -        -          -         -              FP_CLOSE
+mpi                   50000000  8        113.484  -        -        -          -         -              EXACT
+mapreduce             50000000  1        253.444  19.770   231.711  .977       .985      8312652        FP_CLOSE
+mapreduce             50000000  2        142.895  19.802   119.425  2.056      1.610     15836507       FP_CLOSE
+mapreduce             50000000  4        95.462   19.824   69.089   4.026      2.522     25896376       FP_CLOSE
+mapreduce             50000000  8        81.505   19.817   52.132   6.262      3.293     35176967       FP_CLOSE

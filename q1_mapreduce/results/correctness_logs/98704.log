@@ -1,0 +1,27 @@
+==========================================
+SLURM_JOB_ID = 98704
+SLURM_NODELIST = node[06-07]
+SLURM_JOB_GPUS = 
+==========================================
+=========================================
+Job id:    98704
+Nodes:     node[06-07]
+Mappers:   4
+Input:     data_1M.txt (1000001 lines)
+=========================================
+Compiling...
+
+Split:           .388s
+Map:             6.126s
+Sort (local):    2.043s
+Combine:         4.067s
+Shuffle (merge): .082s
+Reduce:          .240s
+-------------------------
+TOTAL:           12.960s
+
+Lines after map:     3000001
+Lines after combine: 518655
+
+Output written to output/mr_data_1M.txt
+CORRECTNESS: PASSED (same output as sequential)
