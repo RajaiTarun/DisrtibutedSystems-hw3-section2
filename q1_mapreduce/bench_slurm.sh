@@ -80,9 +80,12 @@ seconds() {
     echo "scale=3; ($2 - $1) / 1000000000" | bc
 }
 
-# PASS if the file is the same as the sequential output, FAIL otherwise
+# compares a result file with the sequential output:
+# EXACT    = identical to sequential
+# FP_CLOSE = only floating point rounding differences in the last digits (see compare_outputs.py)
+# FAIL     = a real difference
 check() {
-    if diff -q "$WORK/seq.out" "$1" > /dev/null; then echo PASS; else echo FAIL; fi
+    python3 compare_outputs.py "$WORK/seq.out" "$1" 2> /dev/null
 }
 
 # runs the mapreduce pipeline once
@@ -143,7 +146,7 @@ for N in "${SIZES[@]}"; do
     T0=$(date +%s%N)
     ./sequential < "$INPUT" > "$WORK/seq.out" 2> /dev/null
     T1=$(date +%s%N)
-    echo "sequential,$N,1,$(seconds $T0 $T1),,,,,,PASS" >> "$CSV"
+    echo "sequential,$N,1,$(seconds $T0 $T1),,,,,,REFERENCE" >> "$CSV"
     echo "  sequential: $(seconds $T0 $T1)s"
 
     # mpi from hw2 (same mpirun flags as hw2's bench_mpi.sh)

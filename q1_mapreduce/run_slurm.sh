@@ -17,7 +17,7 @@
 #   master:                    sort -m comb_*.out      > shuffled.out   (the "shuffle": gather + sort)
 #   master:                    reducer  < shuffled.out > output
 #
-# at the end it also runs hw2's sequential program on the same input and diffs the two outputs
+# at the end it also runs hw2's sequential program on the same input and compares the two outputs
 #
 # usage (run it from inside the q1_mapreduce folder, and ../q8 must also be there):
 #   sbatch run_slurm.sh <input_file>                  -> 4 mappers (default)
@@ -144,11 +144,14 @@ echo "Output written to $OUTPUT_FILE"
 
 # correctness check: compare with hw2's sequential program
 ./sequential < "$INPUT_FILE" > "$WORK/seq.out" 2> /dev/null
-if diff -q "$WORK/seq.out" "$OUTPUT_FILE" > /dev/null; then
-    echo "CORRECTNESS: PASSED (same output as sequential)"
-else
+# (compare_outputs.py allows tiny floating point rounding differences in the last digits of big
+# sums, which come from adding the numbers in a different order, everything else must be exact)
+RESULT=$(python3 compare_outputs.py "$WORK/seq.out" "$OUTPUT_FILE")
+if [ "$RESULT" = "FAIL" ]; then
     echo "CORRECTNESS: FAILED (different from sequential)"
-    diff "$WORK/seq.out" "$OUTPUT_FILE"
+    python3 compare_outputs.py "$WORK/seq.out" "$OUTPUT_FILE" > /dev/null
+else
+    echo "CORRECTNESS: PASSED ($RESULT, compared with sequential)"
 fi
 
 # delete the temporary files
