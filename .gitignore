@@ -10,6 +10,7 @@ q8/mpi_q8
 # temporary / generated files
 q1_mapreduce/work_*/
 q1_mapreduce/bench_work_*/
+q1_mapreduce/extra_work_*/
 q1_mapreduce/data_*.txt
 q1_mapreduce/output/
 *.log.tmp
