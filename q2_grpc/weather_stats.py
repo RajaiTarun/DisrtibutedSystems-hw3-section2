@@ -62,6 +62,9 @@ class Stats:
         self.station_rain = [0.0] * S
         # interval id -> number of measurements
         self.intervals = {}
+        # the busiest interval so far (interval_id, count), kept up to date by update(), so that a
+        # query does not have to scan all intervals. None = unknown (after merge), then we scan
+        self.best_interval = None
 
     def has_measurement(self):
         return self.count > 0
@@ -102,7 +105,15 @@ class Stats:
         self.station_rain[station] += rain
 
         interval = timestamp // 60
-        self.intervals[interval] = self.intervals.get(interval, 0) + 1
+        c = self.intervals.get(interval, 0) + 1
+        self.intervals[interval] = c
+        # counts only go up, so only the interval that just changed can become the new busiest one
+        # (same rule as HW2: more measurements, then the smaller interval id)
+        best = self.best_interval
+        if first:
+            self.best_interval = (interval, c)
+        elif best is not None and (c > best[1] or (c == best[1] and interval < best[0])):
+            self.best_interval = (interval, c)
 
     def merge(self, other):
         """adds another Stats into this one (same steps as HW2's mergingWorkerProcessStats)"""
@@ -141,9 +152,12 @@ class Stats:
 
         for interval, c in other.intervals.items():
             self.intervals[interval] = self.intervals.get(interval, 0) + c
+        self.best_interval = None   # has to be found again by scanning (see busiest_interval)
 
     def busiest_interval(self):
         """(interval_id, count): most measurements, ties -> smaller interval id"""
+        if self.best_interval is not None:
+            return self.best_interval   # kept up to date by update(), no scan needed
         best_id, best_count = 0, 0
         found = False
         for interval, c in self.intervals.items():

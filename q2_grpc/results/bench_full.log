@@ -1,0 +1,44 @@
+=========================================
+Job id:       local
+Python:       Python 3.13.9
+Coordinator:  127.0.0.1
+Workers on:   127.0.0.1
+Client on:    127.0.0.1
+Port base:    40501
+Experiments:  workers batch queries rate   (N_MAIN=5000000, N_BATCH=200000)
+=========================================
+
+=== experiment: workers ===
+  workers   N=5000000  W=1  interval   B=1000   R=0        Q=1   ->     765310.5 rec/s  total   6.5333s  FP_CLOSE
+  workers   N=5000000  W=2  interval   B=1000   R=0        Q=1   ->    1317844.2 rec/s  total   3.7941s  FP_CLOSE
+  workers   N=5000000  W=4  interval   B=1000   R=0        Q=1   ->    1435165.3 rec/s  total   3.4839s  FP_CLOSE
+  workers   N=5000000  W=8  interval   B=1000   R=0        Q=1   ->     971633.2 rec/s  total   5.1460s  FP_CLOSE
+  workers   N=5000000  W=1  roundrobin B=1000   R=0        Q=1   ->     149870.5 rec/s  total  33.3621s  FP_CLOSE
+  workers   N=5000000  W=2  roundrobin B=1000   R=0        Q=1   ->     216378.8 rec/s  total  23.1076s  FP_CLOSE
+  workers   N=5000000  W=4  roundrobin B=1000   R=0        Q=1   ->     201218.4 rec/s  total  24.8486s  FP_CLOSE
+  workers   N=5000000  W=8  roundrobin B=1000   R=0        Q=1   ->     145007.9 rec/s  total  34.4809s  FP_CLOSE
+
+=== experiment: batch ===
+  batch     N=200000   W=4  interval   B=1      R=0        Q=0   ->       7336.8 rec/s  total  27.2599s  EXACT
+  batch     N=200000   W=4  interval   B=10     R=0        Q=0   ->      25512.1 rec/s  total   7.8394s  EXACT
+  batch     N=200000   W=4  interval   B=100    R=0        Q=0   ->     284539.2 rec/s  total   0.7029s  EXACT
+  batch     N=200000   W=4  interval   B=1000   R=0        Q=0   ->    1160739.7 rec/s  total   0.1723s  EXACT
+  batch     N=200000   W=4  interval   B=10000  R=0        Q=0   ->    1345632.9 rec/s  total   0.1486s  EXACT
+
+=== experiment: queries ===
+  queries   N=5000000  W=4  interval   B=1000   R=0        Q=0   ->     887477.3 rec/s  total   5.6339s  FP_CLOSE
+  queries   N=5000000  W=4  interval   B=1000   R=0        Q=1   ->     725453.6 rec/s  total   6.8922s  FP_CLOSE
+  queries   N=5000000  W=4  interval   B=1000   R=0        Q=4   ->     524221.3 rec/s  total   9.5380s  FP_CLOSE
+  queries   N=5000000  W=4  interval   B=1000   R=0        Q=16  ->     402613.7 rec/s  total  12.4189s  FP_CLOSE
+
+=== experiment: rate ===
+  rate      N=5000000  W=4  interval   B=1000   R=200000   Q=0   ->     199999.0 rec/s  total  25.0001s  FP_CLOSE
+  rate      N=5000000  W=4  interval   B=1000   R=400000   Q=0   ->     399988.7 rec/s  total  12.5004s  FP_CLOSE
+  rate      N=5000000  W=4  interval   B=1000   R=800000   Q=0   ->     799950.6 rec/s  total   6.2504s  FP_CLOSE
+  rate      N=5000000  W=4  interval   B=1000   R=1600000  Q=0   ->    1404171.7 rec/s  total   3.5608s  FP_CLOSE
+  rate      N=5000000  W=4  interval   B=1000   R=0        Q=0   ->    1357122.4 rec/s  total   3.6843s  FP_CLOSE
+
+=========================================
+Benchmark complete. Results in results/bench_results.csv
+Wrong results: 0
+=========================================

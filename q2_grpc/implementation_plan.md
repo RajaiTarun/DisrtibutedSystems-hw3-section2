@@ -222,8 +222,8 @@ Uses from the rest of the repo: `../q8/sequential.cpp` (reference), `../q8/gener
 | 5 Client | done (`client.py`: batch size + rate) |
 | 6 Dashboard | done (`dashboard.py`: live, --once, --bench, --stats, --shutdown) |
 | 7 Local run + correctness | done on the Mac: `run_local.sh`, `verify_correctness.sh` 253/253 passed |
-| 8 Cluster demo | script ready (`run_cluster.sh`); to run on RCE |
-| 9 Benchmarks | script ready (`bench.sh`, tested locally with small N); full run on RCE pending |
-| 10 Plots + analysis | `plot_results.py` ready; waits for the benchmark results |
-| 11 Docs + report | README.md + tutorial.md done; report section after the benchmarks |
-| 12 Submission check | not started |
+| 8 Cluster demo | done on RCE: coordinator node01, workers node02/03/06, client node02, dashboards node03 + node06 (`screenshots/`) |
+| 9 Benchmarks | done (laptop, cluster queue full near the deadline): 22 runs, 0 wrong (`results/`) |
+| 10 Plots + analysis | done (`plots/`, `results/summary.md`) |
+| 11 Docs + report | done: README, tutorial, report section 2 (Q2) |
+| 12 Submission check | final push |

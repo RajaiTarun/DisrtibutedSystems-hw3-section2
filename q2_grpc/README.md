@@ -78,6 +78,7 @@ q2_grpc/
 ├── verify_correctness.sh    253 correctness tests against HW2's sequential program
 ├── run_cluster.sh           live demo on the cluster (RCE guide style)
 ├── bench.sh                 benchmarks (cluster with sbatch, or one machine)
+├── measure_resources.sh     peak memory + cpu time of every process of one run (uses run_measured.py)
 ├── plot_results.py          plots/*.png and results/summary.md from the benchmark CSV
 ├── results/  plots/         benchmark results and plots used in the report
 ├── implementation_plan.md   the plan
@@ -247,8 +248,44 @@ Set `BASE_PORT=...` to choose another one.
 
 ## 9. Benchmarks
 
+### Datasets (reproducible)
+All datasets come from HW2's generator `../q8/generate_dataset.py` with a fixed seed, so the same
+parameters always give byte-identical files:
+```bash
+.venv/bin/python ../q8/generate_dataset.py --n 5000000 --k 10 --s 100 --seed 42 --out data_5M.txt
+```
+| Parameter | Value |
+|---|---|
+| seed | 42 |
+| K (top stations), S (stations) | 10, 100 |
+| N | 5,000,000 (workers, queries, rate), 200,000 (batch size), 100K / 1M (correctness) |
+| station_id | uniform in [0, S-1] |
+| timestamp | uniform in [0, 10 N], so about 6 records per 60-second interval (N/6 intervals) |
+| temperature / humidity / pressure / rainfall / wind speed | uniform in [-20, 50] / [0, 100] / [950, 1050] / [0, 50] / [0, 40], 2 decimals |
+
+The correctness tests also use all 13 HW2 test cases in `../q8/testcases/`.
+
+### Why these configurations
+* **5M records:** long enough that every run takes several seconds (3.5 to 35 s), so start-up costs and
+  laptop noise matter less, but short enough to run all 22 configurations in about 15 minutes.
+* **Batch size 1000** for all other experiments: the batch-size experiment shows that 1000 records per
+  message already gets most of the maximum speed (1.16M vs 1.35M records/s at 10000).
+* **1 to 8 workers:** the laptop has 10 cores; with 8 workers plus coordinator, client and dashboard the
+  processes already outnumber the cores.
+* **One dashboard every 100 ms** in the workers experiment: a realistic live dashboard. The queries
+  experiment uses dashboards that query back to back (the worst case).
+* **Rates 200K to 1.6M records/s:** from well below to just above the measured maximum (about 1.4M).
+
+### Running the benchmarks
+
 `bench.sh` runs every experiment, each with a fresh system, and checks every final result against
 HW2's sequential program.
+
+**The results in `results/` and in the report were measured on a laptop** (Apple M4, all processes on
+localhost), because the cluster queue was full close to the deadline (the TAs allowed running gRPC locally).
+Correctness (253/253) and the multi-node demo (`screenshots/`) were done on the RCE cluster.
+`results/bench_results.csv` holds all 22 runs; the `queries` experiment was run twice because of laptop noise,
+and the second run is used (`results/bench_queries_rerun.*`).
 
 | Experiment | What changes | Fixed |
 |---|---|---|
@@ -280,6 +317,12 @@ coord_rss_mb,coord_cpu_s,worker_rss_mb_max,worker_cpu_s_total,correct
 * `q_*_ms`: query latency seen by the dashboards (only measured while the stream is running).
 * memory / CPU columns: from GNU `/usr/bin/time` (cluster only; empty on a Mac).
 * `correct`: `EXACT` / `FP_CLOSE` / `FAIL` against HW2 sequential.
+
+**Memory and CPU** of every process (peak RSS and CPU time, works on a Mac and on Linux):
+```bash
+./measure_resources.sh 5000000 4 interval        # -> results/resources_interval.txt
+./measure_resources.sh 5000000 4 roundrobin      # -> results/resources_roundrobin.txt
+```
 
 Run **one benchmark job at a time**. Copy the results to the laptop for the plots and the report:
 ```bash

@@ -12,7 +12,7 @@
 \usepackage{xcolor}
 \usepackage[hidelinks]{hyperref}
 
-\graphicspath{{../q1_mapreduce/plots/}}
+\graphicspath{{../q1_mapreduce/plots/}{../q2_grpc/plots/}{../q2_grpc/screenshots/}}
 \setlist{nosep,leftmargin=*}
 \setlength{\parskip}{4pt}
 \setlength{\parindent}{0pt}
@@ -24,7 +24,7 @@
 
 \title{Distributed Systems HW3 -- Section 2\\
 \large Weather Data Analytics (HW2 Q8) using MapReduce and gRPC}
-\author{Team \textcolor{red}{XX}: Rajai Tarun Kanaiyalal (\textcolor{red}{roll no.}) \and \textcolor{red}{Teammate name (roll no.)}}
+\author{Rajai Tarun Kanaiyalal (2025201034) \and Yash Khator (2024101133)}
 \date{}
 
 \begin{document}
@@ -110,7 +110,8 @@ same output as the HW2 sequential program.
 A \code{double} only keeps about 15--16 digits, and adding 10 million numbers in a different order gives a slightly different
 rounding. Our HW2 MPI program shows the same difference against sequential when it uses 1, 2 or 4 workers. So our checker
 (\code{compare\_outputs.py}) requires counts, ids and timestamps to match exactly, and allows decimal numbers to differ only by a
-relative $10^{-10}$. Every run passed: 15 matched exactly and 25 differed only by this rounding.
+relative $10^{-10}$ (or by one unit in the 6th decimal for a \emph{rounding tie}, see Q2). Every run passed: 15 matched exactly and
+25 differed only by this rounding.
 
 \subsection{Experimental setup}
 We used the HW2 dataset generator with seed 42, $K=10$ and $S=100$, and input sizes of 1M, 10M, 20M and 50M records (50M
@@ -270,6 +271,227 @@ was much simpler to write. For data that does not fit on one machine, MapReduce 
 
 %=====================================================================
 \section{Q2: Real-time streaming analytics using gRPC}
-\textit{To be added.}
+
+Here the same Q8 analytics run on a \emph{stream}: records arrive one after another, and the analytics must be up to date
+at any moment while data is still coming in. As instructed by the TAs, Q2 is written in \textbf{Python with \code{grpcio}}.
+The code and run instructions are in \code{q2\_grpc/README.md}.
+
+\subsection{Architecture}
+\begin{center}\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.8cm}>{\raggedright\arraybackslash}X}
+\toprule
+Program & Role \\
+\midrule
+\code{client.py} & reads the dataset and streams it to the coordinator in batches, at a chosen rate \\
+\code{coordinator.py} & gRPC server: splits every batch between the workers, answers queries by merging the workers' results \\
+\code{worker.py} ($W$ processes) & gRPC server: keeps a \code{Stats} object for the records it gets \\
+\code{dashboard.py} & CLI dashboard: live view of the analytics; also \code{-{}-once}, \code{-{}-bench}, \code{-{}-shutdown} \\
+\code{weather\_stats.py} & the Q8 analytics in Python (port of HW2's \code{q8\_common.cpp}): update, merge, top-$K$, output \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The client sends the header ($N$, $K$, $S$) with \code{Configure}, then the records over one \code{StreamRecords} call. The
+coordinator splits each batch into one small batch per worker and puts it into that worker's \textbf{queue}; one \textbf{sender
+thread per worker} sends the batches with \code{ProcessBatch}, so all workers get data at the same time. Each worker adds its
+records to its own \code{Stats} object, exactly like an HW2 MPI worker. When a dashboard calls \code{GetAnalytics}, the
+coordinator asks all workers for their partial \code{Stats} at the same time (\code{GetPartial}), merges them with the same
+merge rule as HW2, and returns the result in the HW2 output format together with live counters (records received and
+processed, ingest rate, records per worker). Because merging works at any moment, a query in the middle of the stream
+simply shows the analytics of the records processed so far.
+
+\subsection{The gRPC interface}
+\begin{center}\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.8cm}>{\raggedright\arraybackslash}p{6.3cm}>{\raggedright\arraybackslash}X}
+\toprule
+Service & RPC & Why \\
+\midrule
+Coordinator & \code{Configure(StreamConfig) $\to$ Ack} & sends $N,K,S$ and resets the analytics, so the system can be reused \\
+            & \code{StreamRecords(stream RecordBatch) $\to$ Ack} & \textbf{client streaming}: the whole dataset over one call; returns when all is processed \\
+            & \code{GetAnalytics $\to$ AnalyticsReply} & current analytics (HW2 text) + live counters, any time during the stream \\
+Worker      & \code{Configure}, \code{ProcessBatch(RecordBatch)} & a worker gets its share in batches \\
+            & \code{GetPartial $\to$ PartialStats} & the worker's partial \code{Stats} (same fields as HW2's struct) \\
+Both        & \code{Shutdown} & used by our scripts to stop the system \\
+\bottomrule
+\end{tabularx}
+\end{center}
+A \code{RecordBatch} holds many records, so the client decides how many records go into one message (the batch size).
+
+\subsection{Important decisions}
+\begin{itemize}
+\item \textbf{Distribution strategy.} By default a record goes to worker $\lfloor t/60\rfloor \bmod W$ (\emph{by interval}), so every
+60-second interval lives on exactly one worker. Then each worker knows the complete count of its intervals, and it only has to
+report its single busiest interval: the global busiest interval is the best of these. A query message stays small (the global
+fields, $S$ station totals and one interval), however much data has arrived. For comparison we also implemented
+\emph{round-robin} (records to the workers in turn): perfectly even load, but the records of one interval end up on several
+workers, so every query must send all interval counts of every worker. Top-$K$ works with both: all $S=100$ station totals
+are sent and added up before the top $K$ are chosen.
+\item \textbf{One process per worker.} In Python only one thread per process can run Python code at a time (the GIL), so
+workers are separate processes; they then really compute in parallel. Threads are still used for waiting on the network.
+\item \textbf{Concurrency.} A worker's \code{ProcessBatch} and \code{GetPartial} can arrive at the same time (gRPC uses a thread
+pool), so a lock protects its \code{Stats}: a query always sees whole batches. The coordinator's queues have a maximum size, so a
+slow worker slows the stream down (\emph{back pressure}) instead of filling the memory. \code{StreamRecords} returns only when all
+queues are empty, so the answer after the stream always includes every record.
+\item \textbf{Busiest interval kept up to date.} At first a worker found its busiest interval by scanning all its intervals on every
+query, while holding its lock. With dashboards querying non-stop this blocked the workers most of the time (4 dashboards: 45K
+records/s). Since counts only go up, it is enough to compare the one interval that just changed with the current best, so
+\code{update()} now keeps the busiest interval up to date and a query just reads it.
+\item \textbf{Cluster setup.} The cluster's default Python is 3.6, too old for grpcio, so we use Python 3.11 in a virtual
+environment with only \code{grpcio} and \code{protobuf} (the generated gRPC code is committed; plots are made on the laptop).
+The cluster also sets \code{http\_proxy}, and Python gRPC would send even local connections through it, so all our channels
+switch the proxy off (\code{grpc.enable\_http\_proxy = 0}).
+\end{itemize}
+
+\subsection{Correctness}
+\code{verify\_correctness.sh} runs 253 checks, both on the laptop and on the RCE cluster (all passed on both):
+our Python analytics against HW2's C++ \code{sequential} on all 13 test cases; all 13 test cases through the gRPC system with
+1, 2 and 4 workers, both strategies and batch sizes 1, 7 and 1000 (234 runs); 100K and 1M generated records; and 4 dashboards
+querying non-stop during a 1M-record stream, where no query failed, the processed count never went down and never exceeded
+$N$, and the final result was correct. Every benchmark run below is also checked against \code{sequential}.
+
+Besides the rounding of very large sums (Q1), one more rounding effect appeared: a \textbf{rounding tie}. Every input value has
+2 decimals, so the sum of the temperatures is a multiple of 0.01, and the average over $N=20{,}000$ records is a multiple of
+0.0000005. The exact average can therefore lie exactly halfway between two 6-decimal numbers (e.g.\ 14.9807675), and the tiny
+rounding error of the sum decides whether it is printed as 14.980767 or 14.980768. \code{compare\_outputs.py} therefore also
+accepts a difference of one unit in the 6th decimal; counts, ids and the top-$K$ order must still match exactly.
+
+\subsection{Demo on the RCE cluster}\label{sec:q2demo}
+Following the RCE guide, \code{run\_cluster.sh} (inside \code{salloc -{}-nodes=4}) started the coordinator on node01 and 4 workers
+on node02, node03 and node06. The two dashboards ran on node03 and node06 and the client on node02, each in its own terminal,
+so every connection went over the cluster network. The client streamed 1M records at 100{,}000 records/s. While the stream was
+running, both dashboards showed the growing analytics (Fig.~\ref{fig:demo}, left: 405{,}000 records after 4\,s, queries in about
+10\,ms). At the end they showed all 1{,}000{,}000 records (right), and the final analytics are exactly the HW2 \code{sequential}
+output for this dataset (e.g.\ \code{AVERAGE\_TEMPERATURE 14.999518}, \code{TOTAL\_RAINFALL 24999581.170000} and the same top-10
+stations).
+
+\begin{figure}[!htbp]
+\centering
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\linewidth]{intermediate_state.png}\caption{During the stream (node03).}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\linewidth]{final_state.png}\caption{After the stream.}\end{subfigure}
+\caption{The CLI dashboard during the cluster demo (coordinator on node01, 4 workers, client on node02).}
+\label{fig:demo}
+\end{figure}
+
+\subsection{Experimental setup}
+The benchmarks ran on a laptop (Apple M4: 4 performance + 6 efficiency cores, 16\,GB; Python 3.13, grpcio 1.84), with every
+program as a separate process on \code{localhost}; the TAs allowed running gRPC locally, and the cluster queue was full close to
+the deadline. Correctness (253/253) and the multi-node demo (Section~\ref{sec:q2demo}) were done on the RCE cluster. Datasets come from the HW2 generator
+(seed 42, $K=10$, $S=100$): 5M records for most runs, 200K for the batch-size runs. Every run starts a fresh system, and its
+final result is checked against HW2's \code{sequential}: all 22 runs were correct (5 \code{EXACT}, 17 \code{FP\_CLOSE}).
+The client builds all messages before it starts, and the time is measured from the first record sent until the coordinator
+confirms that \emph{all} records are processed (end to end). On a laptop, repeated runs can differ by up to about 30\%.
+The generator draws timestamps uniformly from $[0, 10N]$ (about 6 records per 60-second interval) and the values uniformly from
+fixed ranges with 2 decimals (details and the exact commands are in the README).
+
+\textbf{Why these configurations.} 5M records make every run last several seconds (3.5--35\,s), so start-up costs and noise
+matter less, while all 22 runs still fit in about 15 minutes. Batch size 1000 is used everywhere else because the batch-size
+experiment shows it already reaches most of the maximum speed. 1 to 8 workers covers the laptop's 10 cores (with 8 workers the
+processes already outnumber the cores). The workers experiment uses one dashboard refreshing every 100\,ms, like a real live
+view; the queries experiment uses dashboards that query back to back, the worst case. The requested rates go from well below
+to just above the measured maximum.
+
+\subsection{Results}
+
+\begin{figure}[!htbp]
+\centering
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\linewidth]{throughput_vs_workers.png}\caption{Throughput vs workers.}\label{fig:q2workers}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\linewidth]{query_latency_strategy.png}\caption{Query latency vs workers.}\label{fig:q2latency}\end{subfigure}
+\caption{Number of workers and distribution strategy (5M records, batch 1000, one dashboard querying every 100\,ms).}
+\end{figure}
+
+\paragraph{More workers help, up to the coordinator's limit (Fig.~\ref{fig:q2workers}).}
+With the interval strategy the throughput goes from 0.77M records/s (1 worker) to 1.32M (2) and 1.44M (4). Unlike in C++,
+the analytics in Python is real work: one worker alone manages about 0.8M records/s, so a second worker almost doubles the
+speed. After that the \textbf{coordinator} becomes the limit: it is a single Python process that touches every record to decide
+which worker gets it. With 8 workers it drops to 0.97M: 8 workers, the coordinator, the client and the dashboard are 11 busy
+processes on 10 cores (6 of them slower efficiency cores), so they slow each other down.
+
+\paragraph{The distribution strategy matters a lot (Fig.~\ref{fig:q2latency}).}
+With round-robin, the \emph{same} runs reach only 0.15--0.22M records/s, and a query takes 0.56--1.07\,s instead of
+1.3--11\,ms. The reason is the busiest interval: with round-robin every worker has a part of almost every interval (about
+830K intervals at 5M records), so for every query each worker must put all its interval counts into the reply, while holding
+its lock. That takes most of a second, and a dashboard asks every 100\,ms, so the workers are blocked most of the time and
+ingestion collapses. With the interval strategy a worker sends only its busiest interval, so a reply is tiny whatever the amount
+of data. Round-robin has perfectly even load (exactly 1.25M records per worker at $W=4$), but the interval strategy is almost as
+even (1.248M--1.252M) because timestamps are spread uniformly. Query latency grows a little with $W$ for the interval strategy
+(more workers to ask and more partial results to merge, and more processes sharing the cores).
+
+\begin{figure}[!htbp]
+\centering
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\linewidth]{throughput_vs_batch.png}\caption{Throughput vs batch size (200K records).}\label{fig:q2batch}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\linewidth]{rate.png}\caption{Requested vs achieved stream rate (5M).}\label{fig:q2rate}\end{subfigure}
+\caption{How the records are streamed (4 workers, interval strategy).}
+\end{figure}
+
+\paragraph{Batch size: every message has a fixed cost (Fig.~\ref{fig:q2batch}).}
+With 1 record per message the system manages only 7.3K records/s; with 10 records 25.5K, 100 records 285K, 1000 records 1.16M
+and 10000 records 1.35M. Every message costs the same fixed amount of work, whatever its size: gRPC framing, a Python call on
+both sides, and a hand-over between threads, once from the client to the coordinator and once more from the coordinator to
+each worker. With 1 record per message that is about 130\,$\mu$s per record, so 200K records take 27\,s. With 1000 or more
+records per message the fixed cost is shared by many records and the per-record work (reading and updating the statistics)
+dominates, so bigger batches help less and less.
+
+\paragraph{Stream rate: the system keeps up to about 1.4M records/s (Fig.~\ref{fig:q2rate}).}
+When the client sends at a fixed rate, the system processes exactly that rate: 200K, 400K and 800K records/s requested gave
+199,999, 399,989 and 799,951 records/s. At 1.6M requested it reaches only 1.40M, the same as without any limit (1.36M): that is
+the maximum speed of this setup. If the stream is faster than that, the coordinator's full queues make the stream wait
+(back pressure), so nothing is lost and the memory does not grow; the data just arrives later.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{concurrent_queries.png}
+\caption{Dashboards querying non-stop during the stream (5M records, 4 workers, interval strategy).}
+\label{fig:q2queries}
+\end{figure}
+
+\paragraph{Queries during the stream cost ingestion speed (Fig.~\ref{fig:q2queries}).}
+With 0, 1, 4 and 16 dashboards querying back to back, the throughput goes from 1.44M to 1.09M, 0.77M and 0.58M records/s,
+and the median query latency from 3.3 to 6.0 and 19\,ms. The queries still get fast answers (16 dashboards together answered
+about 7,200 queries in 12\,s), but every query takes each worker's lock for a moment and runs in the coordinator's Python
+process, which also routes the stream, so the two compete. A normal dashboard that refreshes every few hundred milliseconds
+costs almost nothing; only many dashboards querying non-stop slow the stream down noticeably. (This is after the fix that
+keeps the busiest interval up to date; before it, 4 non-stop dashboards brought the stream down to 45K records/s.)
+
+
+\paragraph{Memory and CPU.}
+We measured every process of one run (5M records, 4 workers, one dashboard every 100\,ms) with \code{measure\_resources.sh}:
+\begin{center}\small
+\begin{tabular}{lrrrr}
+\toprule
+ & \multicolumn{2}{c}{By interval} & \multicolumn{2}{c}{Round-robin} \\
+Process & peak memory & CPU time & peak memory & CPU time \\
+\midrule
+coordinator & 66\,MB & 5.8\,s & 646\,MB & 21.1\,s \\
+each worker & 60\,MB & 2.6\,s & 181--195\,MB & 7.0\,s \\
+client (5M records prepared as messages) & 563\,MB & 5.7\,s & 563\,MB & 5.9\,s \\
+dashboard & 33\,MB & 0.3\,s & 34\,MB & 0.3\,s \\
+\bottomrule
+\end{tabular}
+\end{center}
+Workers keep only statistics, never the records, so with the interval strategy they need about 60\,MB (mostly Python itself
+plus the interval counts) no matter how long the stream is. Round-robin needs 10$\times$ more memory in the coordinator and
+3--4$\times$ more CPU in total for the same data: every query copies all interval counts of every worker into messages, sends
+them, and merges them. The coordinator uses more CPU time than the run lasts (5.8\,s in 3.6\,s) because gRPC does its network work
+in its own threads, next to the Python thread that routes the records.
+
+\subsection{Streaming (gRPC) vs batch (MapReduce, MPI)}
+\begin{center}\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X}
+\toprule
+ & MPI (HW2, C++) & MapReduce (Q1, C++) & gRPC streaming (Q2, Python) \\
+\midrule
+Data & complete file, in memory & complete file, on disk & records arrive continuously \\
+When is the answer ready & at the end & at the end & any time (queries take milliseconds) \\
+What limits the speed & rank 0 reading the input alone & text conversion, sorting, serial split & the single coordinator routing every record, per-message cost \\
+Memory & all records in memory & a few MB per process & only the statistics (no records are kept) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+Their speeds are not directly comparable (different languages and machines), but the models are. MPI and MapReduce answer
+once, after all data is there. The streaming system gives an answer at any moment, in milliseconds, because every worker keeps
+its statistics up to date and a query only has to merge the small partial results. The idea is the same in all three: partial
+results that can be merged. What changes is when the merge happens (once at the end, or at every query) and what has to be
+sent for it; the second point is exactly why the interval strategy is so much better than round-robin here.
+
 
 \end{document}

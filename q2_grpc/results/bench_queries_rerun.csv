@@ -1,0 +1,5 @@
+experiment,N,workers,strategy,batch,rate,query_clients,send_s,total_s,throughput,queries,q_mean_ms,q_p50_ms,q_p95_ms,q_max_ms,records_per_worker,coord_rss_mb,coord_cpu_s,worker_rss_mb_max,worker_cpu_s_total,correct
+queries,5000000,4,interval,1000,0,0,3.3923,3.4703,1440797.9,,,,,,1247673;1249673;1250992;1251662,,,,,FP_CLOSE
+queries,5000000,4,interval,1000,0,1,4.4713,4.5889,1089583.3,1357,3.377,3.273,4.786,9.709,1247673;1249673;1250992;1251662,,,,,FP_CLOSE
+queries,5000000,4,interval,1000,0,4,6.3707,6.5129,767702.6,4179,6.227,5.992,9.139,17.347,1247673;1249673;1250992;1251662,,,,,FP_CLOSE
+queries,5000000,4,interval,1000,0,16,8.4328,8.6706,576662.8,7213,19.199,19.169,27.130,46.308,1247673;1249673;1250992;1251662,,,,,FP_CLOSE

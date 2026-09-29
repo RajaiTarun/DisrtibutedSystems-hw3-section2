@@ -1,0 +1,10 @@
+# N=5000000 workers=4 strategy=interval batch=1000, 1 dashboard every 100 ms
+RESULT records=5000000 batch=1000 rate=0 send_s=3.4840 total_s=3.5692 throughput=1400881.2
+QUERIES count=35 mean_ms=3.457 p50_ms=3.464 p95_ms=5.224 max_ms=5.920 max_processed=5000000 monotonic=yes
+coordinator.py max_rss_mb=66.2 user_s=3.62 sys_s=2.15 wall_s=9.00
+worker.py max_rss_mb=59.9 user_s=2.15 sys_s=0.49 wall_s=9.00
+worker.py max_rss_mb=59.8 user_s=2.17 sys_s=0.50 wall_s=9.00
+worker.py max_rss_mb=59.8 user_s=2.18 sys_s=0.49 wall_s=9.00
+worker.py max_rss_mb=59.9 user_s=2.16 sys_s=0.50 wall_s=9.00
+client.py max_rss_mb=562.6 user_s=5.38 sys_s=0.34 wall_s=8.90
+dashboard.py max_rss_mb=33.4 user_s=0.19 sys_s=0.15 wall_s=8.92

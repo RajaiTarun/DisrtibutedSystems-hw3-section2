@@ -1,0 +1,20 @@
+=========================================
+Job id:       local
+Python:       Python 3.13.9
+Coordinator:  127.0.0.1
+Workers on:   127.0.0.1
+Client on:    127.0.0.1
+Port base:    40501
+Experiments:  queries   (N_MAIN=5000000, N_BATCH=200000)
+=========================================
+
+=== experiment: queries ===
+  queries   N=5000000  W=4  interval   B=1000   R=0        Q=0   ->    1440797.9 rec/s  total   3.4703s  FP_CLOSE
+  queries   N=5000000  W=4  interval   B=1000   R=0        Q=1   ->    1089583.3 rec/s  total   4.5889s  FP_CLOSE
+  queries   N=5000000  W=4  interval   B=1000   R=0        Q=4   ->     767702.6 rec/s  total   6.5129s  FP_CLOSE
+  queries   N=5000000  W=4  interval   B=1000   R=0        Q=16  ->     576662.8 rec/s  total   8.6706s  FP_CLOSE
+
+=========================================
+Benchmark complete. Results in results/bench_results.csv
+Wrong results: 0
+=========================================
