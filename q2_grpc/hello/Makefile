@@ -10,9 +10,18 @@ CXX = g++
 PC_PATH = $(GRPC_HOME)/lib/pkgconfig:$(GRPC_HOME)/lib64/pkgconfig:$(PKG_CONFIG_PATH)
 PKG = PKG_CONFIG_PATH=$(PC_PATH) pkg-config
 
+# on the cluster grpc is installed as static libraries (.a files). a static library does not bring
+# the libraries it needs itself (upb, c-ares, re2, openssl, zlib, ...), so we ask pkg-config for
+# those too with --static. on the mac grpc is a shared library and finds them by itself.
+ifdef GRPC_HOME
+LIBS_FLAGS = --libs --static
+else
+LIBS_FLAGS = --libs
+endif
+
 # -Wno-deprecated-declarations hides warnings that come from inside the grpc headers (not our code)
 CXXFLAGS = -std=c++17 -O2 -Wno-deprecated-declarations $(shell $(PKG) --cflags grpc++ protobuf)
-LDFLAGS = $(shell $(PKG) --libs grpc++ protobuf)
+LDFLAGS = $(shell $(PKG) $(LIBS_FLAGS) grpc++ protobuf)
 GRPC_PLUGIN = $(shell which grpc_cpp_plugin)
 
 all: hello_server hello_client
