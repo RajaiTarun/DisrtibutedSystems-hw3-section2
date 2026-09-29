@@ -74,8 +74,13 @@ def main():
     stop_event = threading.Event()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=8), options=MESSAGE_OPTIONS)
     weather_pb2_grpc.add_WorkerServicer_to_server(WorkerServicer(stop_event), server)
-    if server.add_insecure_port(address) == 0:
-        print(f"worker: could not listen on {address}", file=sys.stderr)
+    try:
+        port = server.add_insecure_port(address)
+    except RuntimeError:
+        port = 0
+    if port == 0:
+        print(f"worker: could not listen on {address} (is the port already used by another program?)",
+              file=sys.stderr)
         sys.exit(1)
     server.start()
     print(f"worker listening on {address}", file=sys.stderr)

@@ -34,7 +34,7 @@ NUM_NODES=${#NODES[@]}
 
 if [ "$ACTION" = "stop" ]; then
     if [ -f "$STATE" ]; then
-        "$PY" dashboard.py "$(cat "$STATE")" --shutdown && echo "stopped coordinator and workers"
+        GRPC_CONNECT_TIMEOUT=5 "$PY" dashboard.py "$(cat "$STATE")" --shutdown && echo "stopped coordinator and workers"
         rm -f "$STATE"
     else
         echo "nothing to stop"

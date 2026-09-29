@@ -161,7 +161,7 @@ run_one() {
     # final result + summary, then stop the system
     "$PY" dashboard.py "$COORD" --once > "$LOG.output.txt" 2> /dev/null
     "$PY" dashboard.py "$COORD" --stats > "$LOG.stats.txt" 2> /dev/null
-    "$PY" dashboard.py "$COORD" --shutdown 2> /dev/null
+    GRPC_CONNECT_TIMEOUT=5 "$PY" dashboard.py "$COORD" --shutdown 2> /dev/null
     for pid in "${PIDS[@]}"; do wait "$pid" 2> /dev/null; done
 
     # ---- collect the numbers ----

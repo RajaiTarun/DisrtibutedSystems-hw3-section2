@@ -200,8 +200,13 @@ def main():
     # enough threads for the client stream + many dashboards at the same time
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=64), options=MESSAGE_OPTIONS)
     weather_pb2_grpc.add_CoordinatorServicer_to_server(CoordinatorServicer(workers, strategy, stop_event), server)
-    if server.add_insecure_port(address) == 0:
-        print(f"coordinator: could not listen on {address}", file=sys.stderr)
+    try:
+        port = server.add_insecure_port(address)
+    except RuntimeError:
+        port = 0
+    if port == 0:
+        print(f"coordinator: could not listen on {address} (is the port already used by another program?)",
+              file=sys.stderr)
         sys.exit(1)
     server.start()
     print(f"coordinator listening on {address} with {len(workers)} workers, strategy {strategy}", file=sys.stderr)

@@ -22,11 +22,31 @@ if [ ! -x "$PY" ]; then
 fi
 [ -f weather_pb2.py ] || ./gen_proto.sh > /dev/null
 
-BASE_PORT=${BASE_PORT:-50051}
+# per-user port, so we never clash with another user's server on the same node
+BASE_PORT=${BASE_PORT:-$((40000 + $(id -u) % 20000))}
 COORD="127.0.0.1:$BASE_PORT"
 TESTCASES=../q8/testcases
 COMPARE=../q1_mapreduce/compare_outputs.py
 TMP=$(mktemp -d)
+
+# waits until the coordinator answers; if it does not start (e.g. its port is taken by another
+# program), stop with a clear message instead of letting every test wait for a timeout
+wait_for_coordinator() {   # $1 = coordinator log file, $2 = coordinator process id
+    for ((try = 0; try < 120; try++)); do
+        if "$PY" -c "
+import sys, grpc
+from grpc_common import CHANNEL_OPTIONS
+grpc.channel_ready_future(grpc.insecure_channel(sys.argv[1], options=CHANNEL_OPTIONS)).result(timeout=1)
+" "$COORD" 2> /dev/null; then
+            return 0
+        fi
+        kill -0 "$2" 2> /dev/null || break    # the coordinator has already stopped: no need to wait
+    done
+    echo "ERROR: the coordinator did not start on $COORD (port in use? try BASE_PORT=45000 $0)"
+    echo "--- coordinator log ---"
+    cat "$1"
+    exit 1
+}
 
 PIDS=()
 start_system() {    # $1 = number of workers, $2 = strategy
@@ -37,11 +57,12 @@ start_system() {    # $1 = number of workers, $2 = strategy
         PIDS+=($!)
         addresses+=("127.0.0.1:$((BASE_PORT + 1 + i))")
     done
-    "$PY" coordinator.py "$COORD" "$2" "${addresses[@]}" 2> /dev/null &
+    "$PY" coordinator.py "$COORD" "$2" "${addresses[@]}" 2> "$TMP/coordinator.log" &
     PIDS+=($!)
+    wait_for_coordinator "$TMP/coordinator.log" $!
 }
 stop_system() {
-    "$PY" dashboard.py "$COORD" --shutdown 2> /dev/null
+    GRPC_CONNECT_TIMEOUT=5 "$PY" dashboard.py "$COORD" --shutdown 2> /dev/null
     sleep 0.5
     for pid in "${PIDS[@]}"; do kill "$pid" 2> /dev/null; done
     wait 2> /dev/null

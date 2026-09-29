@@ -343,6 +343,8 @@ rm -rf .venv                                                      # only to star
 | `No module named grpc` | Use `.venv/bin/python` (or `source .venv/bin/activate`), not the system `python3`. |
 | `setup_env.sh`: python is too old | Cluster: `PYTHON=/usr/bin/python3.11 ./setup_env.sh`, or `module load python/3.12.5` first. |
 | `could not connect to ...` | Start the workers before (or with) the coordinator; on the cluster use the node name, not `localhost`. |
+| Everything hangs / no output on the cluster | The cluster sets `http_proxy` (for pip), and python gRPC would route its connections through it. Our channels switch this off (`grpc.enable_http_proxy = 0` in `grpc_common.py`); if you write your own gRPC test, do the same or `unset http_proxy https_proxy`. |
+| `could not listen on ... (is the port already used...)` | Another program uses the port: `BASE_PORT=45000 ./verify_correctness.sh` (any free number). |
 | Port already in use | Another run is still active (`pkill -u $USER -f worker.py`), or another user uses the port: `BASE_PORT=45000 ./...`. |
 | `srun: unrecognized option '--overlap'` | Old Slurm: remove `--overlap` from the `srun` lines in `run_cluster.sh` / `bench.sh`. |
 | A background `ssh ... &` shows `Stopped` | Use `ssh -n` (the shell pauses background jobs that read from the keyboard). |

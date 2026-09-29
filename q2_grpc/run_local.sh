@@ -30,7 +30,8 @@ W=${2:-4}
 STRATEGY=${3:-interval}
 BATCH=${4:-1000}
 RATE=${5:-0}
-BASE_PORT=${BASE_PORT:-50051}
+# per-user port, so we never clash with another user's server on the same node
+BASE_PORT=${BASE_PORT:-$((40000 + $(id -u) % 20000))}
 COORD="127.0.0.1:$BASE_PORT"
 
 if [ -z "$INPUT" ] || [ ! -f "$INPUT" ]; then
@@ -39,10 +40,29 @@ if [ -z "$INPUT" ] || [ ! -f "$INPUT" ]; then
 fi
 mkdir -p logs
 
+# waits until the coordinator answers; if it does not start (e.g. its port is taken by another
+# program), stop with a clear message instead of letting every test wait for a timeout
+wait_for_coordinator() {   # $1 = coordinator log file, $2 = coordinator process id
+    for ((try = 0; try < 120; try++)); do
+        if "$PY" -c "
+import sys, grpc
+from grpc_common import CHANNEL_OPTIONS
+grpc.channel_ready_future(grpc.insecure_channel(sys.argv[1], options=CHANNEL_OPTIONS)).result(timeout=1)
+" "$COORD" 2> /dev/null; then
+            return 0
+        fi
+        kill -0 "$2" 2> /dev/null || break    # the coordinator has already stopped: no need to wait
+    done
+    echo "ERROR: the coordinator did not start on $COORD (port in use? try BASE_PORT=45000 $0)"
+    echo "--- coordinator log ---"
+    cat "$1"
+    exit 1
+}
+
 # stop everything when the script ends (also on Ctrl+C)
 PIDS=()
 cleanup() {
-    "$PY" dashboard.py "$COORD" --shutdown 2> /dev/null
+    GRPC_CONNECT_TIMEOUT=5 "$PY" dashboard.py "$COORD" --shutdown 2> /dev/null
     sleep 0.5
     for pid in "${PIDS[@]}"; do kill "$pid" 2> /dev/null; done
     wait 2> /dev/null
@@ -59,6 +79,7 @@ for ((i = 0; i < W; i++)); do
 done
 "$PY" coordinator.py "$COORD" "$STRATEGY" "${WORKER_ADDRESSES[@]}" 2> logs/coordinator.log &
 PIDS+=($!)
+wait_for_coordinator logs/coordinator.log $!
 
 # 2. client in the background, live dashboard in the foreground until the stream is done
 "$PY" client.py "$COORD" "$INPUT" "$BATCH" "$RATE" > logs/client.out 2> logs/client.log &
