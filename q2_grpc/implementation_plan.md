@@ -72,10 +72,10 @@ Sources: `hw3-final.pdf` (Section 2 Q2, gRPC documentation links in Section 3),
 - **Exact output:** Python floats are the same 64-bit doubles as C++, and `f"{x:.6f}"` rounds the same
   way as C++ `fixed << setprecision(6)`, so outputs can match HW2 exactly (or `FP_CLOSE` for huge sums).
 - **Generated code:** `python -m grpc_tools.protoc` makes `weather_pb2.py` / `weather_pb2_grpc.py`
-  (script `gen_proto.sh`); these files are not committed, they are generated on each machine.
-- **Environment:** a virtual environment (`.venv`) with the packages from `requirements.txt`
-  (`grpcio`, `grpcio-tools`, `protobuf`; `pandas`, `matplotlib` only for plots). This installs only
-  Python packages inside our own folder, no system software.
+  (script `gen_proto.sh`, laptop only). These files are committed, so the cluster needs no code generator.
+- **Environment (keep the cluster install minimal):** a virtual environment `.venv` in our folder.
+  Cluster: only `grpcio` + `protobuf` (`requirements.txt`), or nothing if the Python already has them.
+  Laptop: also `grpcio-tools`, `pandas`, `matplotlib` (`requirements-laptop.txt`); plots are made there.
 
 ### 2.3 Concurrency
 - Worker: one `threading.Lock` around its `Stats`; `ProcessBatch` and `GetPartial` both take it.
@@ -91,9 +91,9 @@ Sources: `hw3-final.pdf` (Section 2 Q2, gRPC documentation links in Section 3),
 ### Phase 0: Setup
 | Step | What | Done when |
 |---|---|---|
-| 0.1 | Mac: virtual environment with Homebrew Python 3.13 (`python3.13 -m venv .venv`), `pip install -r requirements.txt` | `python -c "import grpc"` works in the venv |
+| 0.1 | Mac: `./setup_env.sh --laptop` (Homebrew Python 3.13, grpcio + tools + plotting packages) | `python -c "import grpc"` works in the venv |
 | 0.2 | Cluster: find a recent Python (`module avail`, `python3 --version`, `python3.x`), check what the TAs meant by "old version" | a Python ≥ 3.9 is available |
-| 0.3 | Cluster: venv with that Python + `pip install -r requirements.txt` (only Python packages, in our folder) | `import grpc` works on a compute node |
+| 0.3 | Cluster: `PYTHON=/usr/bin/python3.11 ./setup_env.sh` (only grpcio + protobuf, in our folder) | `import grpc` works on a compute node |
 | 0.4 | Run the real system across nodes (the live demo in phase 8 does this; a separate hello test is not needed any more, gRPC already worked across nodes with C++) | client and dashboards on other nodes reach the coordinator |
 
 ### Phase 1: Interface
@@ -191,7 +191,8 @@ final result is checked against HW2 sequential. Results: `results/bench_results.
 ```
 q2_grpc/
 ├── implementation_plan.md   this file
-├── requirements.txt         grpcio, grpcio-tools, protobuf, pandas, matplotlib
+├── requirements.txt         grpcio, protobuf (the only packages on the cluster)
+├── requirements-laptop.txt  + grpcio-tools, pandas, matplotlib (laptop only)
 ├── setup_env.sh             creates .venv and installs requirements (Mac / cluster)
 ├── weather.proto            gRPC interface
 ├── gen_proto.sh             generates weather_pb2.py / weather_pb2_grpc.py
@@ -213,7 +214,7 @@ Uses from the rest of the repo: `../q8/sequential.cpp` (reference), `../q8/gener
 
 | Phase | Status |
 |---|---|
-| 0 Setup | Mac done (Python 3.13 venv, grpcio 1.84); cluster: default python3 is 3.6 (too old), use /usr/bin/python3.11 or module python/3.12.5 — to be set up |
+| 0 Setup | Mac done (Python 3.13 venv, grpcio 1.84). Cluster: default python3 is 3.6 (too old); `PYTHON=/usr/bin/python3.11 ./setup_env.sh` installs only grpcio + protobuf into .venv (generated code is committed, plots are made on the Mac) |
 | 1 Interface | done (`weather.proto`, `gen_proto.sh`) |
 | 2 Analytics in Python | done (`weather_stats.py`, `sequential.py`: identical to HW2 C++ on all test cases) |
 | 3 Worker | done (`worker.py`) |

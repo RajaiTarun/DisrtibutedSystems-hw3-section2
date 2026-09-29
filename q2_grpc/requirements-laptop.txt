@@ -1,0 +1,7 @@
+# extra packages, only on the laptop (never needed on the cluster):
+#   grpcio-tools      to regenerate weather_pb2.py / weather_pb2_grpc.py after changing weather.proto
+#   pandas, matplotlib to make the plots (plot_results.py)
+-r requirements.txt
+grpcio-tools>=1.60
+pandas
+matplotlib

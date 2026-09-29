@@ -65,9 +65,11 @@ benchmarks, plots, and cleanup. `tutorial.md` explains gRPC and the design for b
 ```
 q2_grpc/
 ├── weather.proto            gRPC interface (messages + services)
-├── gen_proto.sh             generates weather_pb2.py / weather_pb2_grpc.py from weather.proto
-├── requirements.txt         grpcio, grpcio-tools, protobuf (+ pandas, matplotlib for plots)
-├── setup_env.sh             creates the virtual environment .venv and generates the gRPC code
+├── weather_pb2.py / weather_pb2_grpc.py   code generated from weather.proto (committed)
+├── gen_proto.sh             regenerates them after weather.proto changes (laptop, needs grpcio-tools)
+├── requirements.txt         what is needed to run: grpcio, protobuf (the only packages on the cluster)
+├── requirements-laptop.txt  + grpcio-tools (code generation) and pandas, matplotlib (plots), laptop only
+├── setup_env.sh             creates the virtual environment .venv
 ├── weather_stats.py         Q8 analytics (Stats), port of HW2's q8_common.cpp
 ├── sequential.py            analytics without gRPC (test of weather_stats.py)
 ├── grpc_common.py           channel helper (no message size limit, waits for the server)
@@ -84,7 +86,8 @@ q2_grpc/
 ```
 It also uses `../q8/` (`sequential.cpp` as the reference, `generate_dataset.py`, test cases) and
 `../q1_mapreduce/compare_outputs.py`, so keep the whole repository.
-`weather_pb2.py`, `weather_pb2_grpc.py` and `.venv/` are generated on each machine and not committed.
+`.venv/` is created on each machine and not committed. The generated `weather_pb2.py` /
+`weather_pb2_grpc.py` are committed, so the cluster does not need the code generator.
 
 ---
 
@@ -116,13 +119,14 @@ service Worker {
 ## 4. Setup on a Mac / Linux laptop
 
 grpcio needs **Python 3.9 or newer**. `setup_env.sh` creates a virtual environment `.venv` in this
-folder (only Python packages, nothing installed on the system) and generates the gRPC code.
+folder (only Python packages, nothing installed on the system). On the laptop it also installs the
+code generator and the plotting packages:
 
 ```bash
 git clone https://github.com/RajaiTarun/DisrtibutedSystems-hw3-section2.git ds-hw3-sec2
 cd ds-hw3-sec2/q2_grpc
-./setup_env.sh                          # picks the newest python (3.13, 3.12, ..., 3.9)
-PYTHON=python3.12 ./setup_env.sh        # or choose one yourself
+./setup_env.sh --laptop                          # picks the newest python (3.13, 3.12, ..., 3.9)
+PYTHON=python3.12 ./setup_env.sh --laptop        # or choose one yourself
 ```
 Mac: the built-in `/usr/bin/python3` is old (3.9); `brew install python` gives a newer one.
 If `pip` hangs while downloading, stop it (Ctrl+C) and run `./setup_env.sh` again.
@@ -197,8 +201,13 @@ cd ~ && git clone https://github.com/RajaiTarun/DisrtibutedSystems-hw3-section2.
 cd ~/ds-hw3-sec2/q2_grpc
 PYTHON=/usr/bin/python3.11 ./setup_env.sh
 ```
+**What this installs on the cluster:** only `grpcio` and `protobuf` (plus `typing_extensions`, which
+grpcio needs), into `.venv` in this folder. Nothing system-wide; `rm -rf .venv` removes it all.
+If the chosen Python already has grpcio and a recent enough protobuf, **nothing** is installed.
+Plots are made on the laptop, so pandas / matplotlib are never needed on the cluster.
+
 The virtual environment lives in your home folder, which every compute node sees, so the programs run
-on any node with `.venv/bin/python`. Only Python packages are installed, into `.venv` (nothing system-wide).
+on any node with `.venv/bin/python`.
 
 ---
 
@@ -319,7 +328,7 @@ from the same machine. Clients connect to `host:port` (on the cluster the node n
 ```bash
 rm -rf logs bench_work_* data_*.txt .cluster_coordinator __pycache__
 pkill -u $USER -f worker.py; pkill -u $USER -f coordinator.py     # if something is still running
-rm -rf .venv weather_pb2.py weather_pb2_grpc.py                   # only to start again from scratch
+rm -rf .venv                                                      # only to start again from scratch
 ```
 
 ---
@@ -328,7 +337,9 @@ rm -rf .venv weather_pb2.py weather_pb2_grpc.py                   # only to star
 
 | Problem | Fix |
 |---|---|
-| `run ./setup_env.sh first` | The virtual environment is missing: `./setup_env.sh` (on the cluster `PYTHON=/usr/bin/python3.11 ./setup_env.sh`). |
+| `run ./setup_env.sh first` | The virtual environment is missing: `./setup_env.sh --laptop` (on the cluster `PYTHON=/usr/bin/python3.11 ./setup_env.sh`). |
+| `plot_results.py`: `No module named pandas` | Plots are made on the laptop (`./setup_env.sh --laptop`), not on the cluster. |
+| Error about the protobuf version when importing `weather_pb2` | The Python's own protobuf is too old: `rm -rf .venv` and run `setup_env.sh` again (it then installs a new one into `.venv`). |
 | `No module named grpc` | Use `.venv/bin/python` (or `source .venv/bin/activate`), not the system `python3`. |
 | `setup_env.sh`: python is too old | Cluster: `PYTHON=/usr/bin/python3.11 ./setup_env.sh`, or `module load python/3.12.5` first. |
 | `could not connect to ...` | Start the workers before (or with) the coordinator; on the cluster use the node name, not `localhost`. |
