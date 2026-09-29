@@ -1,0 +1,100 @@
+==========================================
+SLURM_JOB_ID = 99588
+SLURM_NODELIST = node[01-03,06]
+SLURM_JOB_GPUS = 
+==========================================
+=========================================
+Job id:  99588
+Nodes:   node[01-03,06] (4 nodes)
+Tasks:   8
+Parts:   multinode
+=========================================
+Compiling...
+
+=== multinode, N=50000000, P=8, nodes=4 ===
+wrote 50000000 records (K=10, S=100, seed=42) to /home/cs3401.49/ds-hw3-sec2/q1_mapreduce/extra_work_99588/data.txt
+  mapreduce P=8 nodes=4: total=108.813s map=78.830s FP_CLOSE
+
+=========================================
+Done. Results:
+--- results/extra_memory.csv
+impl        N         workers  process       elapsed_s  max_rss_mb
+sequential  50000000  1        sequential    63.58      3275.1
+mpi         50000000  4        master_rank0  58.10      3441.1
+mpi         50000000  4        worker_rank1  58.24      1032.5
+mpi         50000000  4        worker_rank2  58.22      1032.5
+mpi         50000000  4        worker_rank3  58.24      1032.7
+mpi         50000000  4        worker_rank4  58.21      1032.7
+mapreduce   50000000  4        combiner_00   62.82      3.5
+mapreduce   50000000  4        combiner_01   68.93      3.4
+mapreduce   50000000  4        combiner_02   64.89      3.4
+mapreduce   50000000  4        combiner_03   69.37      3.4
+mapreduce   50000000  4        mapper_00     34.64      3.3
+mapreduce   50000000  4        mapper_01     38.07      3.3
+mapreduce   50000000  4        mapper_02     35.57      3.2
+mapreduce   50000000  4        mapper_03     38.04      3.3
+mapreduce   50000000  4        reducer       2.56       3.4
+mapreduce   50000000  4        shuffle       4.01       3.7
+mapreduce   50000000  4        sort_00       62.82      15.8
+mapreduce   50000000  4        sort_01       68.15      13.8
+mapreduce   50000000  4        sort_02       64.72      13.9
+mapreduce   50000000  4        sort_03       68.51      13.8
+mpi         50000000  8        master_rank0  113.60     3351.0
+mpi         50000000  8        worker_rank1  113.64     604.1
+mpi         50000000  8        worker_rank2  113.66     603.6
+mpi         50000000  8        worker_rank3  113.59     603.8
+mpi         50000000  8        worker_rank4  113.66     604.1
+mpi         50000000  8        worker_rank5  113.64     603.7
+mpi         50000000  8        worker_rank6  113.62     604.0
+mpi         50000000  8        worker_rank7  113.64     603.6
+mpi         50000000  8        worker_rank8  113.63     603.9
+mapreduce   50000000  8        combiner_00   51.55      3.4
+mapreduce   50000000  8        combiner_01   49.56      3.4
+mapreduce   50000000  8        combiner_02   50.78      3.3
+mapreduce   50000000  8        combiner_03   52.04      3.4
+mapreduce   50000000  8        combiner_04   51.19      3.5
+mapreduce   50000000  8        combiner_05   48.05      3.3
+mapreduce   50000000  8        combiner_06   49.87      3.4
+mapreduce   50000000  8        combiner_07   48.94      3.5
+mapreduce   50000000  8        mapper_00     26.72      3.2
+mapreduce   50000000  8        mapper_01     26.95      3.3
+mapreduce   50000000  8        mapper_02     26.30      3.4
+mapreduce   50000000  8        mapper_03     27.66      3.4
+mapreduce   50000000  8        mapper_04     26.57      3.3
+mapreduce   50000000  8        mapper_05     26.56      3.3
+mapreduce   50000000  8        mapper_06     27.73      3.3
+mapreduce   50000000  8        mapper_07     26.95      3.4
+mapreduce   50000000  8        reducer       3.27       3.4
+mapreduce   50000000  8        shuffle       6.23       4.7
+mapreduce   50000000  8        sort_00       51.02      13.3
+mapreduce   50000000  8        sort_01       49.05      15.4
+mapreduce   50000000  8        sort_02       50.33      15.3
+mapreduce   50000000  8        sort_03       51.63      15.4
+mapreduce   50000000  8        sort_04       50.67      13.4
+mapreduce   50000000  8        sort_05       47.74      13.3
+mapreduce   50000000  8        sort_06       49.29      15.3
+mapreduce   50000000  8        sort_07       48.59      15.4
+--- results/extra_multinode.csv
+impl       N         mappers  nodes  total_s  split_s  map_s   shuffle_s  reduce_s  correct
+mapreduce  50000000  8        4      108.813  19.908   78.830  6.278      3.796     FP_CLOSE
+--- results/extra_stages.csv
+stage     N         mappers  task    elapsed_s  max_rss_mb
+split     10000000  4        all     3.873      -
+mapper    10000000  4        all     17.722     -
+sort      10000000  4        all     16.392     -
+combiner  10000000  4        all     4.439      -
+combiner  10000000  4        task00  4.17       3.4
+combiner  10000000  4        task01  4.25       3.4
+combiner  10000000  4        task02  4.27       3.4
+combiner  10000000  4        task03  4.27       3.3
+mapper    10000000  4        task00  17.37      3.4
+mapper    10000000  4        task01  17.58      3.3
+mapper    10000000  4        task02  17.57      3.3
+mapper    10000000  4        task03  17.57      3.3
+reducer   10000000  4        task00  0.50       3.3
+shuffle   10000000  4        task00  0.78       3.6
+sort      10000000  4        task00  16.24      1281.0
+sort      10000000  4        task01  16.20      1281.0
+sort      10000000  4        task02  16.25      1281.0
+sort      10000000  4        task03  15.71      1281.0
+=========================================

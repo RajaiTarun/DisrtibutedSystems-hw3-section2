@@ -1,0 +1,2 @@
+impl,N,mappers,nodes,total_s,split_s,map_s,shuffle_s,reduce_s,correct
+mapreduce,50000000,8,4,108.813,19.908,78.830,6.278,3.796,FP_CLOSE

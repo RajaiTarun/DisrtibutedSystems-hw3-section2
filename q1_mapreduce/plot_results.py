@@ -12,6 +12,9 @@ Output:
     plots/mr_stage_breakdown.png    where mapreduce spends its time (50M records)
     plots/combiner_effect.png       mapreduce with vs without the combiner (10M records)
     plots/shuffle_lines.png         how many lines reach the shuffle vs number of mappers
+    plots/memory.png                peak memory per process (from bench_extra.sh, PART=memory)
+    plots/map_phase_stages.png      mapper / sort / combiner run separately (bench_extra.sh, PART=stages)
+    plots/multinode.png             mapreduce on 1 node vs several nodes (bench_extra.sh, PART=multinode)
     results/summary.md              the same numbers as markdown tables (for the report)
 """
 
@@ -87,6 +90,129 @@ def save(fig, name):
     fig.savefig(path)
     plt.close(fig)
     print("wrote", path)
+
+
+def extra_plots(bench, out):
+    """plots and tables for the results of bench_extra.sh (memory, separate stages, multinode)"""
+
+    # ---------------- 7. peak memory per process (50M records) ----------------
+    if os.path.exists("results/extra_memory.csv"):
+        mem = pd.read_csv("results/extra_memory.csv")
+        n = int(mem["N"].iloc[0])
+
+        # one bar per kind of process: the biggest value over all tasks of that kind
+        def peak(impl, workers, prefix):
+            r = mem[(mem["impl"] == impl) & (mem["workers"] == workers) & mem["process"].str.startswith(prefix)]
+            return float(r["max_rss_mb"].max())
+
+        bars = [
+            ("Sequential", peak("sequential", 1, "sequential"), REFERENCE_GRAY),
+            ("MPI master (4 workers)", peak("mpi", 4, "master"), COLOR["mpi"]),
+            ("MPI worker (4 workers)", peak("mpi", 4, "worker"), COLOR["mpi"]),
+            ("MPI master (8 workers)", peak("mpi", 8, "master"), COLOR["mpi"]),
+            ("MPI worker (8 workers)", peak("mpi", 8, "worker"), COLOR["mpi"]),
+            ("MR mapper", peak("mapreduce", 8, "mapper"), COLOR["mapreduce"]),
+            ("MR sort (in the pipe)", peak("mapreduce", 8, "sort"), COLOR["mapreduce"]),
+            ("MR combiner", peak("mapreduce", 8, "combiner"), COLOR["mapreduce"]),
+            ("MR shuffle (sort -m)", peak("mapreduce", 8, "shuffle"), COLOR["mapreduce"]),
+            ("MR reducer", peak("mapreduce", 8, "reducer"), COLOR["mapreduce"]),
+        ]
+        fig, ax = plt.subplots(figsize=(7.5, 4.2))
+        labels = [b[0] for b in bars][::-1]
+        values = [b[1] for b in bars][::-1]
+        colors = [b[2] for b in bars][::-1]
+        rects = ax.barh(labels, values, color=colors, height=0.6, edgecolor=SURFACE, linewidth=1.5)
+        ax.set_xscale("log")
+        ax.bar_label(rects, labels=[f"{v:,.1f} MB" for v in values], padding=4, color=INK_2, fontsize=8)
+        ax.set_xlim(1, max(values) * 8)
+        ax.set_xlabel("Peak memory per process (MB, log scale)")
+        ax.set_title(f"Peak memory per process (N = {millions(n)} records)")
+        ax.grid(axis="y", visible=False)
+        save(fig, "memory.png")
+
+        # table: per process kind, and the total over all processes of one run
+        out += [f"## Peak memory (N = {millions(n)})", "",
+                "| Implementation | Workers | Process | Peak memory per process (MB) | Processes |",
+                "|---|---|---|---|---|"]
+        for (impl, workers), group in mem.groupby(["impl", "workers"], sort=False):
+            kinds = group["process"].str.replace(r"_(rank)?\d+$", "", regex=True)
+            for kind, g in group.groupby(kinds, sort=False):
+                out.append(f"| {impl} | {workers} | {kind} | {g['max_rss_mb'].max():,.1f} | {len(g)} |")
+        out += ["", "| Implementation | Workers | Total memory of all processes (MB) |", "|---|---|---|"]
+        for (impl, workers), group in mem.groupby(["impl", "workers"], sort=False):
+            out.append(f"| {impl} | {workers} | {group['max_rss_mb'].sum():,.1f} |")
+        out.append("")
+
+    # ---------------- 8. map phase split into its stages (10M records, 4 mappers) ----------------
+    if os.path.exists("results/extra_stages.csv"):
+        st = pd.read_csv("results/extra_stages.csv")
+        n = int(st["N"].iloc[0])
+        p = int(st["mappers"].iloc[0])
+        order = ["split", "mapper", "sort", "combiner", "shuffle", "reduce"]
+        times = []
+        for stage in order:
+            name = "reducer" if stage == "reduce" else stage
+            r = st[st["stage"] == name]
+            whole = r[r["task"] == "all"]
+            # the stages that ran with srun have an "all" row (wall time), the others have only one task
+            times.append(float(whole["elapsed_s"].iloc[0]) if len(whole) else float(r["elapsed_s"].max()))
+        fig, ax = plt.subplots(figsize=(6.5, 3.6))
+        rects = ax.bar([s.capitalize() for s in order], times, width=0.55, color=COLOR["mapreduce"],
+                       edgecolor=SURFACE, linewidth=1.5)
+        ax.bar_label(rects, fmt="%.1fs", padding=2, color=INK_2, fontsize=8)
+        ax.set_ylabel("Time (s)")
+        ax.set_title(f"MapReduce stages run separately (N = {millions(n)}, {p} mappers)")
+        ax.grid(axis="x", visible=False)
+        save(fig, "map_phase_stages.png")
+
+        mapper_bytes = None
+        if os.path.exists("results/extra_stages_mapper_bytes.txt"):
+            mapper_bytes = int(open("results/extra_stages_mapper_bytes.txt").read().strip())
+        out += [f"## MapReduce stages run separately (N = {millions(n)}, {p} mappers)", "",
+                "| Stage | Time (s) | Peak memory per task (MB) |", "|---|---|---|"]
+        for stage, t in zip(order, times):
+            name = "reducer" if stage == "reduce" else stage
+            r = st[(st["stage"] == name) & (st["task"] != "all")]
+            m = f"{r['max_rss_mb'].max():,.1f}" if len(r) else "-"
+            out.append(f"| {stage} | {t:.2f} | {m} |")
+        if mapper_bytes:
+            out += ["", f"Mapper output for {millions(n)} records: {mapper_bytes / 1e9:.2f} GB "
+                        f"({mapper_bytes / n:.0f} bytes per input record)."]
+        out.append("")
+
+    # ---------------- 9. 1 node vs several nodes (50M records, 8 mappers) ----------------
+    if os.path.exists("results/extra_multinode.csv"):
+        mn = pd.read_csv("results/extra_multinode.csv")
+        row = mn.iloc[0]
+        n = int(row["N"])
+        p = int(row["mappers"])
+        one = bench[(bench["impl"] == "mapreduce") & (bench["N"] == n) & (bench["workers"] == p)].iloc[0]
+        runs = [("1 node", one), (f"{int(row['nodes'])} nodes", row)]
+        fig, ax = plt.subplots(figsize=(5.5, 3.8))
+        bottom = [0.0, 0.0]
+        labels = [r[0] for r in runs]
+        for stage in ["split", "map", "shuffle", "reduce"]:
+            vals = [float(r[1][f"{stage}_s"]) for r in runs]
+            ax.bar(labels, vals, bottom=bottom, width=0.5, color=STAGE_COLOR[stage],
+                   edgecolor=SURFACE, linewidth=1.5, label=stage.capitalize())
+            bottom = [b + v for b, v in zip(bottom, vals)]
+        for x, r in zip(labels, runs):
+            total = float(r[1]["total_s"])
+            ax.annotate(f"{total:.0f}s", (x, total), textcoords="offset points", xytext=(0, 4),
+                        ha="center", color=INK)
+        ax.set_ylabel("Time (s)")
+        ax.set_title(f"MapReduce on 1 node vs {int(row['nodes'])} nodes (N = {millions(n)}, {p} mappers)")
+        ax.set_ylim(0, max(bottom) * 1.15)
+        ax.grid(axis="x", visible=False)
+        ax.legend(loc="upper left", fontsize=8)
+        save(fig, "multinode.png")
+
+        out += [f"## MapReduce on 1 node vs {int(row['nodes'])} nodes (N = {millions(n)}, {p} mappers)", "",
+                "| Nodes | Split | Map | Shuffle | Reduce | Total | Correct |", "|---|---|---|---|---|---|---|"]
+        for label, r in runs:
+            out.append(f"| {label} | {float(r['split_s']):.2f} | {float(r['map_s']):.2f} | {float(r['shuffle_s']):.2f} | "
+                       f"{float(r['reduce_s']):.2f} | {float(r['total_s']):.2f} | {r['correct']} |")
+        out.append("")
 
 
 def main():
@@ -276,6 +402,9 @@ def main():
     for result, count in df["correct"].value_counts().items():
         out.append(f"| {result} | {count} |")
     out.append("")
+
+    # plots + tables from bench_extra.sh (only if those result files exist)
+    extra_plots(df, out)
 
     with open(SUMMARY, "w") as f:
         f.write("\n".join(out))
