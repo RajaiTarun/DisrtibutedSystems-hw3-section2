@@ -51,7 +51,13 @@ programs will also run on Hadoop without any change. Our Slurm script does the s
 \end{enumerate}
 
 \subsection{Our MapReduce design}
-For every record, the mapper prints three lines, using these keys:
+We use \textbf{one MapReduce job}: mapper, combiner and a single reducer; the combiner is the only extra aggregation step.
+
+\textbf{Mapper (how the input is processed).} The mapper reads its piece of the input line by line from stdin. A line with 3
+values is the header \code{N K S}; the mapper only prints \code{K}. (When the input is split, only the first piece contains the
+header, which is fine.) A line with 7 values is a measurement; any other line is skipped. For every measurement the mapper prints
+three \code{key<TAB>value} lines (the \emph{intermediate information}), using these keys. The measurement values are printed exactly
+as the text it read, so nothing is lost:
 
 \begin{center}\small
 \begin{tabular}{lll}
@@ -74,6 +80,18 @@ and divide at the very end.
 
 Top-$K$ stations and the busiest interval can only be decided after \emph{all} the counts are merged (the same bug we found in
 HW2 when each process kept its own top-$K$). That is why we use \textbf{one reducer}: it sees every station and every interval.
+
+\textbf{Combiner and reducer (how the information is combined).} Both read lines that are sorted by key, so all lines of one key
+come one after another. They add up consecutive lines with the same key using the merge rule of the table. The combiner then
+prints the merged line in the same format (it only makes the mapper's output smaller). The reducer instead keeps the result: the
+merged \code{G} values, $K$, a list of the $\le S$ stations, and the busiest interval so far (because the input is sorted, an
+interval's count is final when its key ends, so the intervals do not have to be stored).
+
+\textbf{Final analytics.} At the end the reducer computes the averages as sum / count, takes the minimum, maximum, total and
+extreme count directly from \code{G}, and the hottest and coldest measurement with HW2's tie-breaks (temperature, then smaller
+timestamp, then smaller station id). It sorts the stations by count (descending) and then station id (ascending) and prints the
+first $K$, and the busiest interval is the one with the most records (smaller id on a tie). Everything is printed in exactly the
+HW2 output format, with 6 decimals.
 
 \subsection{Important decisions}
 Table~\ref{tab:decisions} lists the main decisions we took, why, and what effect we measured.
@@ -115,8 +133,10 @@ relative $10^{-10}$ (or by one unit in the 6th decimal for a \emph{rounding tie}
 
 \subsection{Experimental setup}
 We used the HW2 dataset generator with seed 42, $K=10$ and $S=100$, and input sizes of 1M, 10M, 20M and 50M records (50M
-records is 2.1\,GB). We ran MPI with 1, 2, 4 and 8 workers and MapReduce with 1, 2, 4 and 8 mappers. All runs of one benchmark
-were in the same Slurm job, on one node, on the same data. We measured the total time of each run (including reading the input),
+records is 2.1\,GB). The generator is reproducible (the same parameters always give the same file); it draws station ids
+uniformly from $[0,S-1]$, timestamps uniformly from $[0,10N]$ (about 6 records per 60-second interval), and the measurements
+uniformly from fixed ranges with 2 decimals. We ran MPI with 1, 2, 4 and 8 workers and MapReduce with 1, 2, 4 and 8 mappers,
+with and without the combiner (1M and 10M). All runs of one benchmark were in the same Slurm job, on one node, on the same data. We measured the total time of each run (including reading the input),
 the time of each MapReduce stage, and the peak memory of every process.
 
 \subsection{Results}
@@ -492,6 +512,12 @@ once, after all data is there. The streaming system gives an answer at any momen
 its statistics up to date and a query only has to merge the small partial results. The idea is the same in all three: partial
 results that can be merged. What changes is when the merge happens (once at the end, or at every query) and what has to be
 sent for it; the second point is exactly why the interval strategy is so much better than round-robin here.
+
+\textbf{Conclusion.} The streaming system keeps the HW2 analytics correct at every moment of the stream and answers queries
+in milliseconds. Its speed is decided by three things: the number of records per message (each message has a fixed cost, so
+batches of about 1000 are needed), the single coordinator that routes every record (more than 2--4 workers do not help on
+one machine), and the distribution strategy. Splitting by interval keeps every query small, so queries stay fast and do not
+block ingestion, while round-robin makes queries more than 100$\times$ slower and the whole stream 5--7$\times$ slower.
 
 
 \end{document}
