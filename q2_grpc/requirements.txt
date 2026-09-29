@@ -1,0 +1,7 @@
+# python packages for Q2 (installed into .venv by setup_env.sh)
+grpcio>=1.60
+grpcio-tools>=1.60
+protobuf>=4.25
+# only needed for plot_results.py
+pandas
+matplotlib

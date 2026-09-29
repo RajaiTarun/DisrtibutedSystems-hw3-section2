@@ -1,196 +1,188 @@
-# Q2: Real-Time Streaming Analytics with gRPC: Implementation Plan
+# Q2: Real-Time Streaming Analytics with gRPC (Python): Implementation Plan
 
-This is the step-by-step plan for HW3 Section 2, Q2: the HW2 Q8 weather analytics, but on a
-**live stream of records** instead of a complete file. After the last phase, Section 2 (Q1 + Q2)
-is ready to submit.
+HW3 Section 2, Q2: the HW2 Q8 weather analytics on a **live stream of records**, implemented in
+**Python with the `grpcio` library** (TA instruction: Q2 must be Python + grpcio; old Python versions
+do not work with grpcio, so a recent Python is needed). Q1 (MapReduce, C++) is finished and unchanged.
 
-Sources used: `hw3-final.pdf` (Section 2, Q2 and the gRPC documentation links in Section 3),
-`rce_grpc_execution_guide.pdf`, `additional_info.txt`, `Home_Work_2 (1).pdf` (Q8).
+After the last phase, the whole of Section 2 (Q1 + Q2) is ready to submit.
+
+Sources: `hw3-final.pdf` (Section 2 Q2, gRPC documentation links in Section 3),
+`rce_grpc_execution_guide.pdf`, `additional_info.txt`, `Home_Work_2 (1).pdf` (Q8), TA messages.
 
 ---
 
 ## 1. What Q2 asks for
 
-- The **same Q8 analytics** (same input format, output format and tie-break rules as HW2).
-- A **streaming client** replays a pre-generated dataset **as if it were live**. There must be a
-  configurable **rate or batch size** for sending records.
-- A **gRPC server / coordinator** receives the stream.
-- **Multiple workers** do the processing.
+- The **same Q8 analytics** as HW2 (same input, output format, tie-break rules).
+- A **streaming client** replays a pre-generated dataset **as if it were live**, with a configurable
+  **rate or batch size**.
+- A **gRPC server / coordinator** receives the stream; **multiple workers** process it.
 - A mechanism to **keep and combine the analytics state** of the workers.
-- **Queries must work while data is still arriving**, and concurrent updates + queries must be
-  handled correctly.
-- A **CLI dashboard** shows the current analytics while the stream is running.
+- **Queries must work while data is still arriving**; concurrent updates and queries handled correctly.
+- A **CLI dashboard** shows the current analytics during the stream.
 - The **final result must match a correct sequential implementation** (our HW2 `sequential`).
 - A `.proto` with at least **streaming ingestion** and **queries for the current analytics**.
 - Performance study of at least: **number of workers**, **record distribution strategy**,
-  **message batch size**, **query frequency / number of concurrent query clients**.
-  Useful metrics: throughput, query latency, end-to-end time, effect of workers and batch size,
-  effect of concurrent queries, CPU and memory.
+  **message batch size**, **query frequency / concurrent query clients**; useful metrics:
+  throughput, query latency, end-to-end time, CPU and memory.
 - Reproducible datasets (generator, seed, sizes documented).
-- **Submission:** complete gRPC system with multiple workers, `.proto`, streaming client and CLI
-  dashboard, dataset generator, README (setup, compile, run, architecture, experiments),
-  correctness verification, benchmark results, plots/tables and observations.
-- **Language:** C++ (additional_info allows C++ or Python). We use C++ so we can reuse the HW2
-  analytics code.
-- **Cluster:** follow the RCE guide: server on one compute node, clients on other compute nodes,
-  connecting with `<node>:<port>` (not `localhost`), and at least 2 clients running at the same time.
+- **Submission:** gRPC system with multiple workers, `.proto`, streaming client + CLI dashboard,
+  dataset generator, README (setup, run, architecture, experiments), correctness verification,
+  benchmark results, plots/tables and observations.
+- **Cluster (RCE guide):** server on one compute node, clients on other compute nodes, connect with
+  `<node>:<port>` (not `localhost`), at least 2 clients at the same time.
+- **Language:** Python + `grpcio` (TA). TA also said earlier: use existing modules or run locally, and
+  do not install system software.
 
 ---
 
 ## 2. Design
 
 ```
- client ──stream of batches──►  COORDINATOR  ──batches──► worker 0 ┐
- (replays the file,            (gRPC server)  ──batches──► worker 1 ├─ each keeps its own Stats
-  --batch, --rate)                   ▲        ──batches──► worker W ┘   (protected by a mutex)
-                                     │ GetAnalytics()
- dashboard(s) ───────────────────────┘  the coordinator asks every worker for its partial Stats,
- (live view / --once / --bench)          merges them with the HW2 merge code, and returns the result
+ client.py ──stream of batches──►  coordinator.py ──batches──► worker.py 0 ┐
+ (replays the file,                 (gRPC server)  ──batches──► worker.py 1 ├─ each keeps a Stats object
+  --batch, --rate)                        ▲        ──batches──► worker.py W ┘   (protected by a lock)
+                                          │ GetAnalytics()
+ dashboard.py (live / --once / --bench) ──┘  coordinator asks every worker for its partial Stats,
+                                             merges them, returns the result in the HW2 format
 ```
 
-### 2.1 Components
 | Program | Role |
 |---|---|
-| `client` | reads the dataset, sends the header (K, S) and then the records in batches over one gRPC client stream |
-| `coordinator` | gRPC server; receives the stream, splits each batch between the workers, answers analytics queries by merging the workers' partial results |
-| `worker` (W of them) | gRPC server; keeps a HW2 `Stats` object for its share of the records; returns its partial stats when asked |
-| `dashboard` | gRPC client; shows the live analytics, or prints the final output once, or measures query latency |
+| `client.py` | reads the dataset, sends the header (K, S), then the records in batches over one gRPC client stream, at a chosen rate |
+| `coordinator.py` | gRPC server; splits every batch between the workers; one queue + one sender thread per worker; answers queries by merging the workers' partial results |
+| `worker.py` (W processes) | gRPC server; keeps a `Stats` object for its records; returns it when asked |
+| `dashboard.py` | gRPC client: live view, `--once` (HW2 format), `--bench` (query latency), `--stats`, `--shutdown` |
+| `weather_stats.py` | the Q8 analytics in Python: `Stats`, `update`, `merge`, top-K, busiest interval, HW2 output format (a port of HW2's `q8_common.cpp`) |
+| `sequential.py` | the analytics without gRPC (reads the file, prints the result); used to test `weather_stats.py` against HW2's C++ `sequential` |
 
-### 2.2 Which worker gets which record (distribution strategy)
-- **Default: by interval**, `worker = (timestamp / 60) % W`.
-  - Every interval lives on exactly **one** worker, so each worker only has to report *its own
-    busiest interval*, and the coordinator picks the best of those. The answer is still exact.
-  - Stations are few (S = 100), so sending all station counts from every worker is cheap.
-  - So every query is **small and fast, no matter how much data has arrived**.
-- **For comparison: round-robin** (records spread evenly in turn).
-  - Perfect load balance, but an interval is spread over many workers, so each query must send
-    every worker's **whole interval map**, and queries get slower as more data arrives.
-- Comparing the two is the "record distribution strategy" experiment.
+### 2.1 Distribution strategy
+- **By interval (default):** `worker = (timestamp // 60) % W`. Every interval lives on one worker, so a
+  worker only reports its own busiest interval: queries stay small and fast.
+- **Round-robin (for comparison):** records in turn; perfect balance, but each query must ship every
+  worker's whole interval map.
 
-### 2.3 Reuse from HW2
-`../q8/q8_common.cpp/.hpp`: `Stats`, `updateStats()`, `mergingWorkerProcessStats()`,
-`getTopStations()`, `getBusiestInterval()`, `printResults()`. Same analytics and the same 6-decimal
-output format, with no new analytics code.
+### 2.2 Python-specific points
+- **The GIL:** in one Python process only one thread runs Python code at a time. That is why every worker
+  is its own **process**: W workers really compute in parallel. Inside a process, threads are still
+  fine for waiting on the network (gRPC server threads, sender threads).
+- **Speed:** Python is much slower per record than C++, so the workers' analytics is now real work and
+  adding workers should help, until the single coordinator (which touches every record to route it)
+  becomes the limit. The benchmarks will show where that happens.
+- **Exact output:** Python floats are the same 64-bit doubles as C++, and `f"{x:.6f}"` rounds the same
+  way as C++ `fixed << setprecision(6)`, so outputs can match HW2 exactly (or `FP_CLOSE` for huge sums).
+- **Generated code:** `python -m grpc_tools.protoc` makes `weather_pb2.py` / `weather_pb2_grpc.py`
+  (script `gen_proto.sh`); these files are not committed, they are generated on each machine.
+- **Environment:** a virtual environment (`.venv`) with the packages from `requirements.txt`
+  (`grpcio`, `grpcio-tools`, `protobuf`; `pandas`, `matplotlib` only for plots). This installs only
+  Python packages inside our own folder, no system software.
 
-### 2.4 Concurrency
-- Worker: one mutex around its `Stats`; `ProcessBatch` and `GetPartial` both lock it.
-- Coordinator: **one queue + one sender thread per worker**, so batches go to all workers in
-  parallel; counters are protected by a mutex.
-- The end of the client stream is only acknowledged after all worker queues are empty, so a query
-  after the client finishes always sees all the data.
+### 2.3 Concurrency
+- Worker: one `threading.Lock` around its `Stats`; `ProcessBatch` and `GetPartial` both take it.
+- Coordinator: one bounded `queue.Queue` + one sender thread per worker (all workers get data in
+  parallel; if a worker is slow the stream waits: back pressure).
+- The end of the client stream is acknowledged only after all queues are drained, so a query after the
+  client finishes sees all data.
 
 ---
 
 ## 3. Step-by-step plan
 
-Each step is small and has a clear "done when" check.
-
 ### Phase 0: Setup
 | Step | What | Done when |
 |---|---|---|
-| 0.1 | Mac: `brew install grpc` (cmake, protobuf and abseil are already installed) | `pkg-config --modversion grpc++` prints a version |
-| 0.2 | Tiny "hello" gRPC program: `.proto` → generated C++ → compile → client calls server | hello works on the Mac |
-| 0.3 | **Cluster: check for gRPC C++** (`module avail`, `pkg-config grpc++`, `which grpc_cpp_plugin`). If missing: install it in the home folder with conda/micromamba (`grpc-cpp` from conda-forge); if that fails, build gRPC from source | the same hello program works on the cluster |
-| 0.4 | `q2_grpc/Makefile` that generates the gRPC code and builds all programs | `make` builds hello |
+| 0.1 | Mac: virtual environment with Homebrew Python 3.13 (`python3.13 -m venv .venv`), `pip install -r requirements.txt` | `python -c "import grpc"` works in the venv |
+| 0.2 | Cluster: find a recent Python (`module avail`, `python3 --version`, `python3.x`), check what the TAs meant by "old version" | a Python ≥ 3.9 is available |
+| 0.3 | Cluster: venv with that Python + `pip install -r requirements.txt` (only Python packages, in our folder) | `import grpc` works on a compute node |
+| 0.4 | Run the real system across nodes (the live demo in phase 8 does this; a separate hello test is not needed any more, gRPC already worked across nodes with C++) | client and dashboards on other nodes reach the coordinator |
 
-Step 0.3 is the biggest risk, so it is done first.
-
-Cluster check commands:
-```bash
-module avail 2>&1 | grep -iE "grpc|protobuf|conda|anaconda|miniconda|cmake|gcc"
-pkg-config --modversion grpc++ protobuf 2>&1
-which protoc grpc_cpp_plugin conda cmake
-g++ --version | head -1
-```
-
-### Phase 1: Interface (`weather.proto`)
+### Phase 1: Interface
 | Step | What |
 |---|---|
-| 1.1 | Messages `Record`, `RecordBatch` (repeated records), `StreamConfig` (K, S, number of workers, strategy), `Ack` |
-| 1.2 | `PartialStats` (G fields, station arrays, best interval, or the full interval list for round-robin), `AnalyticsRequest`, `AnalyticsReply` (formatted result + live counters) |
-| 1.3 | `service Coordinator { Configure; StreamRecords(stream RecordBatch) returns Ack; GetAnalytics }` |
-| 1.4 | `service Worker { Configure; ProcessBatch(RecordBatch) returns Ack; GetPartial }` |
-| 1.5 | Makefile rule: `protoc` generates `weather.pb.*` and `weather.grpc.pb.*` |
+| 1.1 | `weather.proto`: `Record`, `RecordBatch`, `StreamConfig`, `WorkerConfig`, `Ack`, `Empty`, `PartialStats`, `AnalyticsRequest`, `AnalyticsReply` |
+| 1.2 | `service Coordinator { Configure; StreamRecords(stream RecordBatch); GetAnalytics; Shutdown }`, `service Worker { Configure; ProcessBatch; GetPartial; Shutdown }` |
+| 1.3 | `gen_proto.sh`: generates `weather_pb2.py` + `weather_pb2_grpc.py` |
 
-### Phase 2: Worker (`worker.cpp`)
+### Phase 2: Analytics in Python (no gRPC yet)
 | Step | What | Done when |
 |---|---|---|
-| 2.1 | gRPC server on the address given as an argument; `Stats` + mutex | starts and listens |
-| 2.2 | `ProcessBatch`: lock, then `updateStats()` for every record | counts go up |
-| 2.3 | `GetPartial`: lock, then convert `Stats` to `PartialStats` | a test query returns sensible numbers |
-| 2.4 | `convert.cpp/.hpp`: `statsToProto()` / `protoToStats()` | round trip gives the same values |
+| 2.1 | `weather_stats.py`: `Stats` class (`update`, `merge`, `busiest_interval`, `top_stations`, `format_results` in the exact HW2 format) | |
+| 2.2 | `to_proto` / `from_proto` (Stats ↔ `PartialStats`) | round trip gives the same values |
+| 2.3 | `sequential.py` + compare with HW2's C++ `sequential` on all 13 test cases and generated data | all `EXACT` |
 
-### Phase 3: Coordinator (`coordinator.cpp`)
+### Phase 3: Worker (`worker.py`)
+| Step | What |
+|---|---|
+| 3.1 | gRPC server on the given address; `Configure` creates a fresh `Stats(S)` |
+| 3.2 | `ProcessBatch`: lock, `update` for each record; `GetPartial`: lock, `to_proto` (busiest interval only, or all intervals for round-robin) |
+| 3.3 | `Shutdown` (for the scripts) |
+
+### Phase 4: Coordinator (`coordinator.py`)
+| Step | What |
+|---|---|
+| 4.1 | Connects to W workers (addresses as arguments), forwards `Configure` |
+| 4.2 | `StreamRecords`: splits each batch per worker (interval / round-robin), puts it in that worker's bounded queue; one sender thread per worker calls `ProcessBatch` |
+| 4.3 | After the stream: waits until all queues are empty, then returns `Ack` |
+| 4.4 | `GetAnalytics`: `GetPartial` from every worker, merge, format; live counters (received, processed, elapsed, rate, per worker, done) |
+| 4.5 | `Shutdown`: stops workers and itself |
+
+### Phase 5: Streaming client (`client.py`)
+| Step | What |
+|---|---|
+| 5.1 | Reads the dataset into memory; sends the header with `Configure` |
+| 5.2 | Streams `RecordBatch`es (a generator feeding the client stream) with `--batch` and `--rate` |
+| 5.3 | Waits for the final `Ack`; prints throughput + a machine-readable `RESULT ...` line |
+
+### Phase 6: CLI dashboard (`dashboard.py`)
+| Step | What |
+|---|---|
+| 6.1 | Live view: refreshes every `--interval` ms (status, records processed/received, rate, per-worker counts, query latency, the analytics) |
+| 6.2 | `--once` (exact HW2 output), `--bench` (latency p50/p95/max, checks counts never go down), `--stats`, `--shutdown` |
+
+### Phase 7: Local run + correctness
 | Step | What | Done when |
 |---|---|---|
-| 3.1 | Connects to W workers (addresses as arguments); forwards `Configure` | all workers configured |
-| 3.2 | `StreamRecords`: read batches from the client stream, split each batch per worker (interval or round-robin), put the pieces in one queue per worker; one sender thread per worker sends them | records reach all workers |
-| 3.3 | At the end of the stream, wait until all queues are empty, then return `Ack` | after `Ack` all data is processed |
-| 3.4 | `GetAnalytics`: `GetPartial` from all workers, merge with the HW2 merge code, format with `printResults()`, add live counters (records received, records/s, time since start) | correct answers during ingestion |
+| 7.1 | `run_local.sh`: starts W workers + coordinator, client in the background, live dashboard in the foreground, then compares with sequential | live dashboard works, final `EXACT` |
+| 7.2 | `verify_correctness.sh`: all HW2 test cases × W = 1, 2, 4 × both strategies × batch sizes; generated 100K/1M; 4 dashboards querying during a stream | all pass |
 
-### Phase 4: Streaming client (`client.cpp`)
+### Phase 8: Cluster demo (RCE guide)
 | Step | What |
 |---|---|
-| 4.1 | Read the dataset file; send the header as `Configure` |
-| 4.2 | Send `RecordBatch`es over one client stream. Options: `--batch B` (records per message), `--rate R` (records/s, 0 = as fast as possible) |
-| 4.3 | At the end print records sent, total time and throughput (records/s) |
+| 8.1 | `run_cluster.sh start/stop` inside `salloc --nodes=4`: coordinator on node 1, workers on the others; prints the `ssh` commands for the client and 2 dashboards on other nodes |
+| 8.2 | Run it; capture the live dashboard (screenshot) for the report; final `--once` matches sequential |
 
-### Phase 5: CLI dashboard (`dashboard.cpp`)
-| Step | What |
-|---|---|
-| 5.1 | **Live mode**: every `--interval` ms call `GetAnalytics`, clear the screen and show: records received, ingest rate, main statistics, hottest/coldest, busiest interval, top-K table, and this query's latency |
-| 5.2 | **`--once`**: print exactly the HW2 output format (for correctness checks) |
-| 5.3 | **`--bench Q`**: send Q queries back to back and print latency p50 / p95 / max (for the concurrent query experiments) |
-
-### Phase 6: Local run + correctness
-| Step | What | Done when |
+### Phase 9: Benchmarks (`bench.sh`, cluster via sbatch or one machine)
+| # | Experiment | Values |
 |---|---|---|
-| 6.1 | `run_local.sh`: start W workers + coordinator + dashboard + client on localhost ports, stop everything at the end | the live dashboard updates while data streams in |
-| 6.2 | `verify_correctness.sh`: all HW2 test cases + generated 100K / 1M data, W = 1, 2, 4, both strategies, several batch sizes; compare `dashboard --once` with `sequential` using `../q1_mapreduce/compare_outputs.py` | all pass (`EXACT` or `FP_CLOSE`) |
-| 6.3 | Queries during ingestion: several dashboards while streaming | no crash, no wrong counts, count in every snapshot ≤ N |
+| 9.1 | Workers × strategy | W = 1, 2, 4, 8; interval and round-robin; 1 dashboard every 100 ms |
+| 9.2 | Batch size | 1, 10, 100, 1000, 10000 records per message |
+| 9.3 | Concurrent queries | 0, 1, 4, 16 dashboards querying non-stop |
+| 9.4 | Stream rate | several fixed rates and maximum speed: does the system keep up |
+| 9.5 | CPU / memory | `/usr/bin/time` for workers + coordinator (cluster) |
 
-### Phase 7: Cluster run (like the RCE guide)
+Dataset sizes are chosen after measuring Python's speed (probably 1M records for most runs). Every run's
+final result is checked against HW2 sequential. Results: `results/bench_results.csv`.
+
+### Phase 10: Plots + analysis
 | Step | What |
 |---|---|
-| 7.1 | `salloc --nodes=4 --ntasks-per-node=1`; coordinator on node01, workers on the allocated nodes, client on node02, **2 dashboards on node03 and node04** |
-| 7.2 | Capture the live dashboard (screenshot / text) for the report |
-| 7.3 | The final `dashboard --once` output matches `sequential` on the cluster |
+| 10.1 | `plot_results.py`: throughput vs W (both strategies), query latency vs strategy, throughput vs batch size, concurrent queries, rate; `results/summary.md` |
+| 10.2 | Explain the numbers: per-message cost, GIL and processes, coordinator bottleneck, query cost per strategy, locks |
 
-### Phase 8: Benchmarks (`bench_slurm.sh`, one Slurm job over several nodes)
-| # | Experiment | Values | Measured |
-|---|---|---|---|
-| 8.1 | Number of workers | W = 1, 2, 4, 8 (fixed batch) | throughput, end-to-end time |
-| 8.2 | Batch size | B = 1, 10, 100, 1000, 10000 | throughput (cost per message) |
-| 8.3 | Distribution strategy | by interval vs round-robin | throughput, query latency (and how it grows with data), records per worker |
-| 8.4 | Concurrent queries | 0, 1, 4, 16 query clients | query latency p50/p95, ingestion slowdown |
-| 8.5 | Stream rate | fixed `--rate` values vs max | does the system keep up with the rate |
-| 8.6 | CPU / memory | `/usr/bin/time -f "%e %M %U %S"` for workers + coordinator | CPU time, peak memory |
-
-- Datasets: HW2 generator, seed 42, K = 10, S = 100; 1M records for most runs, 10M for the
-  largest ones.
-- Every run's final output is checked with `compare_outputs.py`.
-- Results go to `results/*.csv` (one line per run), logs to `results/*.log`.
-
-### Phase 9: Plots + analysis
+### Phase 11: Documentation + report
 | Step | What |
 |---|---|
-| 9.1 | `plot_results.py`: throughput vs W, throughput vs batch size, query latency vs concurrent queries, strategy comparison, memory; plus `results/summary.md` tables |
-| 9.2 | Explain the numbers: cost per RPC, coordinator as a bottleneck, lock contention, message sizes, load balance |
+| 11.1 | `README.md`: setup (venv on Mac and cluster), run locally, cluster demo, correctness, benchmarks, plots, troubleshooting |
+| 11.2 | `tutorial.md`: gRPC + protobuf basics in Python, our design, the code, concurrency |
+| 11.3 | Report section 2 (Q2), same simple style as Q1: architecture, `.proto` design, strategy, concurrency, correctness, experiments + plots + reasoning, short comparison of streaming (gRPC) vs batch (MapReduce, MPI) |
 
-### Phase 10: Documentation + report
-| Step | What |
-|---|---|
-| 10.1 | `q2_grpc/README.md`: setup (gRPC on Mac and cluster), build, local run, cluster run (RCE guide style), architecture, experiments, troubleshooting |
-| 10.2 | `q2_grpc/tutorial.md`: gRPC basics for beginners (like Q1's tutorial) |
-| 10.3 | Report section 2 (Q2): architecture, `.proto` design and why, distribution strategy, concurrency, correctness, experiments + plots + reasoning, short comparison of gRPC streaming vs MapReduce vs MPI. Same simple, short style as Q1 |
-
-### Phase 11: Final submission check (all of Section 2)
-- [ ] Q1: code, README, results, plots (done)
+### Phase 12: Final submission check (all of Section 2)
+- [x] Q1: code, README, results, plots, report section
 - [ ] Q2: code, `.proto`, client, dashboard, README, correctness, benchmarks, plots
 - [ ] Report: team / roll number placeholders filled, Q1 + Q2 sections, PDF compiled
 - [ ] Every README command tested from a fresh `git clone` (Mac and cluster)
-- [ ] `.gitignore`: no binaries, datasets or temp files; results and plots committed
-- [ ] Final push, and check how the course wants the submission (repo link or zip)
+- [ ] `.gitignore`: no venv, generated code, datasets or temp files; results and plots committed
+- [ ] Final push; check how the course wants the submission (repo link / zip)
 
 ---
 
@@ -198,27 +190,22 @@ g++ --version | head -1
 
 ```
 q2_grpc/
-├── implementation_plan.md     this file
-├── weather.proto              gRPC interface
-├── Makefile                   generates the gRPC code and builds everything
-├── convert.cpp / convert.hpp  Stats <-> PartialStats (protobuf) conversion
-├── worker.cpp                 worker server
-├── coordinator.cpp            coordinator server
-├── client.cpp                 streaming client (replays the dataset)
-├── dashboard.cpp              CLI dashboard / --once / --bench
-├── run_local.sh               everything on one machine
-├── verify_correctness.sh      correctness tests vs sequential
-├── run_cluster.sh             helper for the cluster demo (RCE guide)
-├── bench_slurm.sh             benchmarks
-├── plot_results.py            plots + summary tables
-├── results/  plots/
+├── implementation_plan.md   this file
+├── requirements.txt         grpcio, grpcio-tools, protobuf, pandas, matplotlib
+├── setup_env.sh             creates .venv and installs requirements (Mac / cluster)
+├── weather.proto            gRPC interface
+├── gen_proto.sh             generates weather_pb2.py / weather_pb2_grpc.py
+├── weather_stats.py         Q8 analytics (port of HW2 q8_common.cpp)
+├── sequential.py            analytics without gRPC (tests weather_stats.py)
+├── grpc_common.py           channel helper
+├── worker.py  coordinator.py  client.py  dashboard.py
+├── run_local.sh  verify_correctness.sh  run_cluster.sh  bench.sh
+├── plot_results.py  results/  plots/
 ├── README.md
 └── tutorial.md
 ```
-
-Uses from the rest of the repo: `../q8/q8_common.*` (analytics), `../q8/sequential.cpp`
-(reference), `../q8/generate_dataset.py` (datasets), `../q8/testcases/` (test inputs),
-`../q1_mapreduce/compare_outputs.py` (output comparison).
+Uses from the rest of the repo: `../q8/sequential.cpp` (reference), `../q8/generate_dataset.py`,
+`../q8/testcases/`, `../q1_mapreduce/compare_outputs.py`.
 
 ---
 
@@ -226,15 +213,16 @@ Uses from the rest of the repo: `../q8/q8_common.*` (analytics), `../q8/sequenti
 
 | Phase | Status |
 |---|---|
-| 0 Setup | Mac done (gRPC 1.84, protobuf 36.2, hello test passes); cluster check pending |
-| 1 Interface | not started |
-| 2 Worker | not started |
-| 3 Coordinator | not started |
-| 4 Client | not started |
-| 5 Dashboard | not started |
-| 6 Local run + correctness | not started |
-| 7 Cluster run | not started |
-| 8 Benchmarks | not started |
-| 9 Plots + analysis | not started |
-| 10 Docs + report | not started |
-| 11 Submission check | not started |
+| 0 Setup | Mac done (Python 3.13 venv, grpcio 1.84); cluster: default python3 is 3.6 (too old), use /usr/bin/python3.11 or module python/3.12.5 — to be set up |
+| 1 Interface | done (`weather.proto`, `gen_proto.sh`) |
+| 2 Analytics in Python | done (`weather_stats.py`, `sequential.py`: identical to HW2 C++ on all test cases) |
+| 3 Worker | done (`worker.py`) |
+| 4 Coordinator | done (`coordinator.py`: per-worker queues + sender threads, back pressure, parallel queries) |
+| 5 Client | done (`client.py`: batch size + rate) |
+| 6 Dashboard | done (`dashboard.py`: live, --once, --bench, --stats, --shutdown) |
+| 7 Local run + correctness | done on the Mac: `run_local.sh`, `verify_correctness.sh` 253/253 passed |
+| 8 Cluster demo | script ready (`run_cluster.sh`); to run on RCE |
+| 9 Benchmarks | script ready (`bench.sh`, tested locally with small N); full run on RCE pending |
+| 10 Plots + analysis | `plot_results.py` ready; waits for the benchmark results |
+| 11 Docs + report | README.md + tutorial.md done; report section after the benchmarks |
+| 12 Submission check | not started |

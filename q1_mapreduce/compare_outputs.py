@@ -15,10 +15,19 @@ so the last digits are rounding noise that depends on the order of the additions
 (hw2's own mpi program has the same difference with sequential when it uses a different
 number of workers, so this is not something mapreduce specific.)
 
+A second, rarer case is a rounding tie. every input value has 2 decimals, so for example the sum
+of the temperatures is a multiple of 0.01, and the average over 20000 records is a multiple of
+0.0000005: its exact value can end in a 5 in the 7th decimal, exactly halfway between two 6-decimal
+numbers. then the tiny rounding error of the sum decides whether it is printed rounded up or down:
+
+    sequential:  AVERAGE_TEMPERATURE 14.980767
+    streaming:   AVERAGE_TEMPERATURE 14.980768      (exact value 14.9807675)
+
 Rules:
     - both files must have the same number of lines and the same words on every line
     - labels and whole numbers (counts, station ids, timestamps, interval ids) must match exactly
-    - decimal numbers must match with a relative tolerance of 1e-10
+    - decimal numbers must match with a relative tolerance of 1e-10, or differ by at most one unit
+      in the last printed decimal (the rounding tie above)
 
 Prints one word and exits with 0 if the files match, or 1 if they don't:
     EXACT     the files are identical
@@ -42,7 +51,11 @@ def numbers_close(x, y):
         fy = float(y)
     except ValueError:
         return False
-    return abs(fx - fy) <= REL_TOL * max(abs(fx), abs(fy), 1.0)
+    if abs(fx - fy) <= REL_TOL * max(abs(fx), abs(fy), 1.0):
+        return True
+    # rounding tie: at most one unit in the last printed decimal (1e-6 for 6 decimals)
+    decimals = min(len(x.split(".")[1]), len(y.split(".")[1]))
+    return abs(fx - fy) <= 1.000001 * 10 ** (-decimals)
 
 
 def main():

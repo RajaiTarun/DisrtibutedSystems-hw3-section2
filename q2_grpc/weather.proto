@@ -1,0 +1,126 @@
+// gRPC interface of the real-time weather analytics system (HW3 section 2, Q2)
+//
+//   client    ---- Configure + StreamRecords (client stream of batches) ----> coordinator
+//   dashboard ---- GetAnalytics -------------------------------------------> coordinator
+//   coordinator ---- Configure + ProcessBatch + GetPartial ----------------> workers
+//
+// the analytics are the same as HW2 Q8
+
+syntax = "proto3";
+
+package weather;
+
+// ---------------- data ----------------
+
+// one measurement line of the dataset
+message Record {
+  int64 timestamp = 1;
+  int32 station_id = 2;
+  double temperature = 3;
+  double humidity = 4;
+  double pressure = 5;
+  double rainfall = 6;
+  double wind_speed = 7;
+}
+
+// many records in one message (the client chooses the batch size)
+message RecordBatch {
+  repeated Record records = 1;
+}
+
+// the header line of the dataset ("N K S"), sent by the client before the stream
+message StreamConfig {
+  bool has_header = 1;   // false for an empty input file
+  int64 n = 2;
+  int32 k = 3;
+  int32 s = 4;
+}
+
+// what the coordinator tells each worker before a stream
+message WorkerConfig {
+  int32 s = 1;                    // number of stations
+  bool send_all_intervals = 2;    // true for round-robin (see PartialStats.intervals)
+}
+
+message Ack {
+  int64 records = 1;
+  string message = 2;
+}
+
+message Empty {}
+
+// ---------------- partial results of one worker ----------------
+
+// index in PartialStats.stations = station id
+message StationPartial {
+  int64 count = 1;
+  double temp_sum = 2;
+  double rain_sum = 3;
+}
+
+message IntervalCount {
+  int64 interval_id = 1;
+  int64 count = 2;
+}
+
+// the same fields as HW2's Stats struct
+message PartialStats {
+  bool has_measurement = 1;
+  int64 count = 2;
+  double temp_sum = 3;
+  double temp_min = 4;
+  double temp_max = 5;
+  double humidity_sum = 6;
+  double humidity_min = 7;
+  double humidity_max = 8;
+  double pressure_sum = 9;
+  double pressure_min = 10;
+  double pressure_max = 11;
+  double rainfall_sum = 12;
+  double rainfall_max = 13;
+  double wind_sum = 14;
+  double wind_max = 15;
+  int64 extreme_count = 16;
+  Record hottest = 17;
+  Record coldest = 18;
+  repeated StationPartial stations = 19;
+  // "interval" strategy: every interval lives on one worker, so only the worker's busiest interval is sent
+  // "roundrobin" strategy: an interval is spread over all workers, so all of them must be sent
+  repeated IntervalCount intervals = 20;
+}
+
+// ---------------- queries ----------------
+
+message AnalyticsRequest {}
+
+message AnalyticsReply {
+  string result = 1;                       // current analytics in exactly the HW2 output format
+  int64 records_received = 2;              // records that reached the coordinator
+  int64 records_processed = 3;             // records already processed by the workers
+  double elapsed_s = 4;                    // time since the stream was configured (until it finished)
+  double ingest_rate = 5;                  // records_processed / elapsed_s
+  bool stream_done = 6;                    // true when the whole stream is processed
+  int32 num_workers = 7;
+  string strategy = 8;
+  repeated int64 records_per_worker = 9;
+}
+
+// ---------------- services ----------------
+
+service Coordinator {
+  // sends the header of the dataset and resets all analytics (call it before every stream)
+  rpc Configure(StreamConfig) returns (Ack);
+  // the client streams the records in batches; returns when all records are processed
+  rpc StreamRecords(stream RecordBatch) returns (Ack);
+  // current analytics, can be called while the stream is running
+  rpc GetAnalytics(AnalyticsRequest) returns (AnalyticsReply);
+  // stops the coordinator and all its workers (used by the scripts)
+  rpc Shutdown(Empty) returns (Ack);
+}
+
+service Worker {
+  rpc Configure(WorkerConfig) returns (Ack);
+  rpc ProcessBatch(RecordBatch) returns (Ack);
+  rpc GetPartial(Empty) returns (PartialStats);
+  rpc Shutdown(Empty) returns (Ack);
+}
