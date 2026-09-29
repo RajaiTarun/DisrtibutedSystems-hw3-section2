@@ -170,8 +170,17 @@ In MapReduce each mapper reads and processes its own piece, so the slow part is 
 mapper but 24\% with 8 mappers. (In real Hadoop this step does not exist, because HDFS already stores the file in pieces.)
 \item \textbf{Shuffle and reduce get slower with more mappers} (2\,s with 1 mapper, 9.5\,s with 8), because more mappers send
 more lines to the reducer (explained below).
-\item \textbf{All 8 mappers share one node}, so they compete for the same memory and disk.
+\item \textbf{Each map task gets only one CPU core.} Slurm gives every task 1 core, so the mapper, \code{sort} and combiner of one
+task (three programs) share that core. All 8 tasks also share one node's memory and disk.
 \end{itemize}
+
+\paragraph{Is it really running in parallel?}
+To be sure, we ran \code{check\_parallel.sh}: the map phase on 10M records in 8 pieces, where every task records its node, its CPU
+core and its start and end time, followed by the same 8 pieces run one after another. On one node, all 8 tasks started at the same
+moment (0.08\,s), ran on 8 different cores, and on average 7.8 of them were running at the same time. The parallel run took
+12.5\,s versus 45.9\,s one after another (3.7$\times$ faster), with identical output. It is not 8$\times$ because each task has only one
+core for its three programs, while the one-after-another run could spread one pipeline over several cores. With \code{-{}-nodes=4}
+the tasks ran on 4 different nodes (2 per node), so the multi-node run really is spread over machines.
 
 \begin{figure}[!htbp]
 \centering
@@ -229,11 +238,14 @@ needed). The whole MapReduce run used only 91\,MB, about \textbf{80 times less}.
 one machine's memory, while MapReduce can.
 
 \paragraph{Running on 4 nodes was slower (Fig.~\ref{fig:multinode}).}
-We also spread the 8 mappers over 4 nodes. This made the run slower (82\,s $\to$ 109\,s); only the map phase got slower. Our
-explanation: the input pieces are stored in our home folder, which is a shared network drive. On one node, the pieces were
-just written by the same node and are still in its memory, so reading them is fast. On 4 nodes, the other 3 nodes must download
-their pieces over the network at the same time. Real Hadoop avoids this with HDFS: the pieces are stored on the worker nodes'
-own disks, and each map task runs on the node that already has its piece (\emph{data locality}).
+We also spread the 8 mappers over 4 nodes. This made the run slower (82\,s $\to$ 109\,s); only the map phase got slower. The
+reason is that \textbf{the nodes are not equally fast}. All our 1-node runs happened on node06, but the 4-node run also used
+node01--03. In the parallelism check, the same pieces took 11.9\,s on node06 but 14.1--15.3\,s on node01--03, and running all 8
+pieces one after another took 45.9\,s on node06 but 60.7\,s on node01. The map phase can only finish when the \emph{slowest} node
+finishes, so the slower nodes decide the time. (At first we thought reading the pieces over the shared network drive was the
+cause, but then node01, which wrote the pieces, would have been the fastest, and it was not.) Real Hadoop handles slow nodes
+by starting a backup copy of a slow task on another node (\emph{speculative execution}), and it stores the input on the
+workers' own disks (HDFS), so each map task can read its piece locally.
 
 \subsection{MPI vs MapReduce: summary}
 \begin{center}\small

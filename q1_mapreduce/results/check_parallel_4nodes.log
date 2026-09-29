@@ -1,0 +1,31 @@
+==========================================
+SLURM_JOB_ID = 99827
+SLURM_NODELIST = node[01-03,06]
+SLURM_JOB_GPUS = 
+==========================================
+=========================================
+Job id:        99827
+Allocated:     node[01-03,06] (4 nodes)
+Tasks (P):     8
+Input size N:  10000000
+=========================================
+
+--- parallel map phase: one srun task per piece ---
+task  node         cpus          start_s      end_s     time_s
+00    node01.local 6                 .07      14.16      14.08
+01    node01.local 38                .07      14.16      14.08
+02    node02.local 2                 .08      15.40      15.32
+03    node02.local 50                .08      15.40      15.32
+04    node03.local 24                .08      14.99      14.91
+05    node03.local 72                .08      14.98      14.90
+06    node06.local 18                .07      12.02      11.94
+07    node06.local 42                .07      12.01      11.94
+
+--- summary ---
+Nodes the tasks actually ran on:        4 (node01.local node02.local node03.local node06.local )
+Wall-clock time of the parallel phase:  15.51s
+Sum of the 8 task times:                112.49s
+Average tasks running at the same time: 7.2
+Same 8 pieces run one after another:    60.70s
+Parallel speedup over one-after-another: 3.91x
+Outputs identical both ways:             yes

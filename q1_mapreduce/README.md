@@ -45,6 +45,7 @@ ds-hw3-sec2/
 │   ├── run_slurm.sh               one run on the cluster (Slurm), with per-stage timing
 │   ├── bench_slurm.sh             main benchmark: sequential vs MPI vs MapReduce
 │   ├── bench_extra.sh             extra benchmark: memory, separate stages, multiple nodes
+│   ├── check_parallel.sh          proves the map tasks run in parallel (and on which nodes)
 │   ├── plot_results.py            makes plots/*.png and results/summary.md
 │   ├── results/                   benchmark results (CSV + logs) used in the report
 │   ├── plots/                     the plots used in the report
@@ -305,6 +306,18 @@ PART=multinode sbatch --nodes=4 --ntasks=8 bench_extra.sh      # 8 mappers on 4 
 
 If 4 nodes are not available (job stays `PD`), use `--nodes=2 --ntasks=8`.
 
+### 8.3 Parallelism check (`check_parallel.sh`, ~2 min)
+Runs the map phase (`mapper | sort | combiner`) on 10M records in 8 pieces with `srun`; every task
+records its node, CPU core, start and end time. Then it runs the same 8 pieces one after another.
+```bash
+sbatch check_parallel.sh                 # 8 tasks on 1 node
+sbatch --nodes=4 check_parallel.sh       # 8 tasks spread over 4 nodes
+cat parallel_<jobid>.log
+```
+In parallel, all tasks start at the same time, run on different cores (and on different nodes with
+`--nodes=4`), and "average tasks running at the same time" is close to 8. Our logs are in
+`results/check_parallel_1node.log` and `results/check_parallel_4nodes.log`.
+
 ---
 
 ## 9. Copy the results back and make the plots
@@ -372,7 +385,7 @@ after `hadoop jar <jar>` and use normal file paths.
 On the cluster (only when **no job is running**, check `squeue -u $USER` first):
 ```bash
 cd ~/ds-hw3-sec2/q1_mapreduce
-rm -rf work_* bench_work_* extra_work_* output data_*.txt
+rm -rf work_* bench_work_* extra_work_* check_work_* output data_*.txt
 rm -f *.err
 quota -s
 ```
