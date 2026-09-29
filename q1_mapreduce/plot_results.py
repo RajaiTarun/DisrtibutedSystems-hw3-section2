@@ -57,8 +57,12 @@ plt.rcParams.update({
     "axes.edgecolor": AXIS,
     "axes.labelcolor": INK_2,
     "axes.titlecolor": INK,
-    "axes.titlesize": 11,
-    "axes.labelsize": 10,
+    # big fonts, because the plots are scaled down to half a page in the report
+    "axes.titlesize": 13,
+    "axes.labelsize": 12,
+    "xtick.labelsize": 11,
+    "ytick.labelsize": 11,
+    "legend.fontsize": 11,
     "axes.grid": True,
     "axes.axisbelow": True,  # gridlines behind the bars, not on top of them
     "grid.color": GRID,
@@ -68,7 +72,7 @@ plt.rcParams.update({
     "xtick.color": INK_2,
     "ytick.color": INK_2,
     "legend.frameon": False,
-    "font.size": 9,
+    "font.size": 11,
     "savefig.dpi": 150,
     "savefig.bbox": "tight",
 })
@@ -123,7 +127,7 @@ def extra_plots(bench, out):
         colors = [b[2] for b in bars][::-1]
         rects = ax.barh(labels, values, color=colors, height=0.6, edgecolor=SURFACE, linewidth=1.5)
         ax.set_xscale("log")
-        ax.bar_label(rects, labels=[f"{v:,.1f} MB" for v in values], padding=4, color=INK_2, fontsize=8)
+        ax.bar_label(rects, labels=[f"{v:,.1f} MB" for v in values], padding=4, color=INK_2, fontsize=10)
         ax.set_xlim(1, max(values) * 8)
         ax.set_xlabel("Peak memory per process (MB, log scale)")
         ax.set_title(f"Peak memory per process (N = {millions(n)} records)")
@@ -159,9 +163,10 @@ def extra_plots(bench, out):
         fig, ax = plt.subplots(figsize=(6.5, 3.6))
         rects = ax.bar([s.capitalize() for s in order], times, width=0.55, color=COLOR["mapreduce"],
                        edgecolor=SURFACE, linewidth=1.5)
-        ax.bar_label(rects, fmt="%.1fs", padding=2, color=INK_2, fontsize=8)
+        ax.bar_label(rects, fmt="%.1fs", padding=2, color=INK_2, fontsize=10)
         ax.set_ylabel("Time (s)")
         ax.set_title(f"MapReduce stages run separately (N = {millions(n)}, {p} mappers)")
+        ax.set_ylim(0, max(times) * 1.15)
         ax.grid(axis="x", visible=False)
         save(fig, "map_phase_stages.png")
 
@@ -204,7 +209,7 @@ def extra_plots(bench, out):
         ax.set_title(f"MapReduce on 1 node vs {int(row['nodes'])} nodes (N = {millions(n)}, {p} mappers)")
         ax.set_ylim(0, max(bottom) * 1.15)
         ax.grid(axis="x", visible=False)
-        ax.legend(loc="upper left", fontsize=8)
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=4, fontsize=10)
         save(fig, "multinode.png")
 
         out += [f"## MapReduce on 1 node vs {int(row['nodes'])} nodes (N = {millions(n)}, {p} mappers)", "",
@@ -248,10 +253,10 @@ def main():
         ax.set_ylim(bottom=0)
         ax.set_title(f"N = {millions(n)} records")
     axes[0].set_ylabel("Total time (s)")
-    fig.supxlabel("Workers (MPI) / mappers (MapReduce)", color=INK_2, fontsize=10, y=-0.04)
+    fig.supxlabel("Workers (MPI) / mappers (MapReduce)", color=INK_2, fontsize=12, y=-0.04)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.08))
-    fig.suptitle("Runtime vs number of workers", y=1.15, fontsize=12, color=INK)
+    fig.suptitle("Runtime vs number of workers", y=1.15, fontsize=14, color=INK)
     save(fig, "runtime_vs_workers.png")
 
     # ---------------- 2. runtime and throughput vs input size (4 workers) ----------------
@@ -315,6 +320,7 @@ def main():
         ax.annotate(f"{total:.0f}s", (x, total), textcoords="offset points", xytext=(0, 4),
                     ha="center", color=INK)
     ax.set_title(f"Where MapReduce spends its time (N = {millions(n)})")
+    ax.set_ylim(0, max(r["total_s"]) * 1.12)
     ax.set_xlabel("Number of mappers")
     ax.set_ylabel("Time (s)")
     ax.grid(axis="x", visible=False)
@@ -333,10 +339,10 @@ def main():
         label = "With combiner" if impl == "mapreduce" else "Without combiner"
         bars = ax1.bar(pos, r["total_s"], width=width, color=COLOR[impl], edgecolor=SURFACE,
                        linewidth=1.5, label=label)
-        ax1.bar_label(bars, fmt="%.0f", padding=2, color=INK_2, fontsize=8)
+        ax1.bar_label(bars, fmt="%.0f", padding=2, color=INK_2, fontsize=10)
         bars = ax2.bar(pos, r["shuffle_lines"] / 1e6, width=width, color=COLOR[impl],
                        edgecolor=SURFACE, linewidth=1.5, label=label)
-        ax2.bar_label(bars, fmt="%.1f", padding=2, color=INK_2, fontsize=8)
+        ax2.bar_label(bars, fmt="%.1f", padding=2, color=INK_2, fontsize=10)
     for ax in (ax1, ax2):
         ax.set_xticks(xpos)
         ax.set_xticklabels([str(w) for w in workers])
